@@ -1,4 +1,7 @@
-"""Adapters for the Massive.com and Robinhood MCP servers.
+"""Skeleton adapters for the Massive.com and Robinhood MCP servers.
+
+These are the original *candidate* providers, not a commitment (docs/ARCHITECTURE.md
+§5). Other vendors plug in by implementing the protocols in ``data/base.py``.
 
 The pipeline talks to MCP through the tiny ``McpToolCaller`` protocol so the
 transport (an MCP client session, a Claude MCP connector, a test double) can be

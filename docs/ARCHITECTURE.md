@@ -6,7 +6,8 @@ schema, or the middleware. The original design summary is kept in
 and adds the implementation decisions made during scaffolding (see
 [Implementation decisions](#implementation-decisions)).
 
-The pipeline extends the dual-MCP stock agent (Massive.com + Robinhood). It is a
+The design started as an extension of the dual-MCP stock agent (Massive.com + Robinhood),
+but **those providers are not locked in** (see §5). It is a
 **research and decision-support system**. It never places orders. A human makes
 every go/no-go call.
 
@@ -101,11 +102,29 @@ historical, point-in-time** version (to backtest it honestly):
 - News and catalyst events (earnings, FDA approvals, analyst actions)
 - Company fundamentals (financials, filings, ownership, valuation)
 
-**Covered:**
+**Providers are not decided.** Massive.com and Robinhood are what the original
+stock agent used, and they are the current *candidates*, not requirements. We are free
+to choose better sources per category. Because each category sits behind its own
+provider interface (`data/base.py`), switching providers means writing one adapter,
+with no changes to the agents.
+
+**Candidate coverage today (from the original stock agent):**
 - Massive.com MCP: historical OHLCV, technical indicators, pivot
-  support/resistance. Feeds the Technical Analysis agent.
-- Robinhood MCP: live quotes, account data, positions. Feeds the middleware's
+  support/resistance. Would feed the Technical Analysis agent.
+- Robinhood MCP: live quotes, account data, positions. Would feed the middleware's
   visibility layer. **Read-only use only.**
+
+**Criteria for choosing providers:**
+- **Point-in-time history.** Data must be retrievable as it was known on a past
+  date, for honest backtests. This matters most for news/catalysts and
+  fundamentals (restatements).
+- **Survivorship-free universes.** Include delisted tickers, or sector
+  screens will backtest too well.
+- Coverage of every category above, ideally with fewer vendors.
+- Programmatic access (API or MCP), reasonable rate limits, cost, and license
+  terms that allow storing data locally.
+- A brokerage is **not** required. The system never trades, so account data is
+  only a convenience for the visibility layer.
 
 **Open gaps:**
 - Live and historical sector-level screening and breadth data.
@@ -141,12 +160,12 @@ Choices made while scaffolding. Each one is easy to revisit.
 | Agent 1 format (open) | The schema records **both** a `potential_score` (0-100) and a `passed` flag per company, so both are always logged. `PipelineConfig.shortlist_mode` (`"ranked"` or `"pass_fail"`) only controls what gets forwarded. The feedback loop gets the score gradient either way. | `schemas.py`, `middleware.py` |
 | Confidence score (open) | Every stage emits a 0-1 `confidence` for each candidate. It is stored as a trajectory on the `Candidate` (`confidence_trajectory`) and used for attribution. **It gates nothing by default** (`confidence_gate=None`), and **downstream agents don't see upstream confidence numbers by default** (`show_upstream_confidence=False`) to avoid anchoring. | `schemas.py`, `middleware.py` |
 | Point-in-time data | Every provider call takes `as_of`. `RawDataBundle.add` rejects a snapshot dated after the run's `as_of`, which guards against look-ahead in backtests. | `data/base.py` |
-| MCP access | The middleware fetches data through provider interfaces, not the agents. The MCP adapters sit behind a small `McpToolCaller` protocol. The Massive/Robinhood tool-name mapping is still TODO. The Robinhood adapter has **no order methods at all**. | `data/mcp.py` |
+| Data access | The middleware fetches data through provider interfaces, not the agents. Vendors are not decided (§5). `data/mcp.py` holds skeleton adapters for the original candidates (Massive, Robinhood) behind a small `McpToolCaller` protocol; the tool-name mapping is TODO. Any other vendor is a new adapter that implements the same protocols. Any quotes/account adapter must have **no order methods**. | `data/base.py`, `data/mcp.py` |
 | User decisions | Stored in a separate table. `Store.review_trail()` (what the process agent reads) never includes them. | `store.py` |
 | Outcomes agent | Plain deterministic code, no LLM, so "no judgment" holds by construction. | `agents/outcomes.py` |
 | Process → Agent 0 improvement | Improvement signals are stored as `ImprovementNote`s with `approved=False`. Only human-approved notes are injected into stage prompts. This guards against the loop overfitting to recent outcomes. | `agents/process_review.py`, `agents/base.py` |
 | Follow-up scheduling | Agent 5 exposes `tick(now)`. It runs the cheap tripwire check every tick and the full re-review when `full_review_interval` has passed. An external scheduler (cron, etc.) calls it. | `agents/follow_up.py` |
 
-**Not built yet:** the backtest harness (replay over a date range with holdout
-enforcement), concrete MCP tool mappings, real sources for the data gaps, and a
-CLI or UI for the middleware report.
+**Not built yet:** data-provider selection and real adapters, the backtest
+harness (replay over a date range with holdout enforcement), and a CLI or UI for
+the middleware report.

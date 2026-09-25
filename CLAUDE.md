@@ -6,7 +6,9 @@ pass-through, structured reasoning, one-way middleware, split outcomes/process r
 and the open decisions.
 
 Hard rules:
-- Decision support only. Never add order-placing code; the Robinhood adapter stays read-only.
+- Decision support only. Never add order-placing code; any quotes/brokerage adapter stays read-only.
+- Data vendors are not decided (Massive/Robinhood are only candidates). Agents must depend on
+  the provider protocols in `data/base.py`, never on a specific vendor.
 - User accept/reject decisions must never reach the process-review agent or any stage prompt.
 - Every data access takes `as_of`; never let a stage see data dated after the run's `as_of`.
 

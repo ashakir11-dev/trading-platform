@@ -18,7 +18,7 @@ src/trading_pipeline/
   middleware.py        runs the stages, carries raw data forward, logs reasoning, user boundary
   store.py             SQLite: reasoning logs, snapshots, positions, reviews, isolated user decisions
   data/base.py         provider protocols, point-in-time RawDataBundle
-  data/mcp.py          Massive.com / Robinhood (read-only) MCP adapters (tool names TODO)
+  data/mcp.py          skeleton adapters for candidate vendors (Massive, read-only Robinhood)
   data/gaps.py         explicit placeholders for the open data gaps
   agents/              one module per agent
 tests/                 scripted-LLM + fixture-data tests
