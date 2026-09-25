@@ -114,6 +114,9 @@ with no changes to the agents.
 - Robinhood MCP: live quotes, account data, positions. Would feed the middleware's
   visibility layer. **Read-only use only.**
 
+**Research:** [`data-sources-research.md`](data-sources-research.md) compares vendors
+across every category and recommends a stack. No stack has been chosen yet.
+
 **Criteria for choosing providers:**
 - **Point-in-time history.** Data must be retrievable as it was known on a past
   date, for honest backtests. This matters most for news/catalysts and
@@ -147,6 +150,10 @@ reasoning" from "no data".
 - **Overfitting risk:** keep a held-out validation period that the system was
   never tuned against (`PipelineConfig.holdout_start`). Weight the process
   agent's reasoning-quality signal, not only outcomes.
+- **The model already knows the past.** Any backtest dated before an LLM's training
+  cutoff can leak outcomes that no point-in-time data fixes. Only results from dates
+  after the training cutoff of every model used count as honest evidence, so set
+  `holdout_start` accordingly.
 - Expect early versions to be mediocre or to lose money. That is the system
   surfacing weak reasoning.
 
