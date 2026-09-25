@@ -188,8 +188,23 @@ class FixtureNews:
                             payload=[{**e, "ts": e["ts"].isoformat()} for e in items])
 
 
+class FixtureFilings:
+    def __init__(self) -> None:
+        self.filings: dict[str, list[dict]] = {}
+
+    async def recent_filings(self, ticker: str, since: datetime, as_of: datetime) -> DataSnapshot:
+        rows = [f for f in self.filings.get(ticker, []) if since.date().isoformat() <= f["filed"] < as_of.date().isoformat()]
+        return DataSnapshot(kind="filings", source="fixture", subject=ticker, as_of=as_of, payload=rows)
+
+
+class FixtureMacro:
+    async def macro(self, as_of: datetime) -> list[DataSnapshot]:
+        return [DataSnapshot(kind="macro", source="fixture", subject="market", as_of=as_of,
+                             payload={"fed_funds_rate": 4.25, "cpi_yoy": 2.9, "macro_marker": "MACRO-OK"})]
+
+
 def providers(**overrides) -> DataProviders:
     base = dict(prices=FixturePrices(), quotes=FixtureQuotes(), sectors=FixtureSectors(), news=FixtureNews(),
-                fundamentals=UnavailableFundamentals())
+                fundamentals=UnavailableFundamentals(), filings=FixtureFilings(), macro=FixtureMacro())
     base.update(overrides)
     return DataProviders(**base)

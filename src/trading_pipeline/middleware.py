@@ -86,6 +86,8 @@ class Middleware:
         # -- Agent 0 ---------------------------------------------------------------------
         market_bundle = RawDataBundle(as_of=as_of)
         market_bundle.extend(await self._data.sectors.market_overview(as_of))
+        # Macro data is market-level, so it reaches every stage (foreseeable-risk checks).
+        market_bundle.extend(await self._data.macro.macro(as_of))
         self._store.save_snapshots(market_bundle.snapshots)
         scan = await scanner.run(market_bundle)
         for call in scan.sectors:
@@ -158,6 +160,7 @@ class Middleware:
             bundle = upstream.filter(subjects={cand.sector, cand.ticker})
             bundle.extend([
                 await self._data.fundamentals.fundamentals(cand.ticker, as_of),
+                await self._data.filings.recent_filings(cand.ticker, as_of - timedelta(days=365), as_of),
                 await self._data.news.events(cand.ticker, as_of - timedelta(days=180), as_of),
             ])
             self._store.save_snapshots(bundle.snapshots)

@@ -1,4 +1,4 @@
-"""Placeholder providers for the open data gaps (see docs/ARCHITECTURE.md §5).
+"""Placeholder providers for data that has no source yet (see docs/ARCHITECTURE.md §6).
 
 They return snapshots marked ``is_gap=True`` so agents are told explicitly that the
 data is missing, and the process agent can attribute failures to data gaps rather
@@ -38,3 +38,13 @@ class UnavailableNews:
 class UnavailableFundamentals:
     async def fundamentals(self, ticker: str, as_of: datetime) -> DataSnapshot:
         return _gap("fundamentals", ticker, as_of, "No fundamentals source chosen yet.")
+
+
+class UnavailableFilings:
+    async def recent_filings(self, ticker: str, since: datetime, as_of: datetime) -> DataSnapshot:
+        return _gap("filings", ticker, as_of, "No filings source configured.")
+
+
+class UnavailableMacro:
+    async def macro(self, as_of: datetime) -> list[DataSnapshot]:
+        return [_gap("macro", "market", as_of, "No macro data source configured.")]

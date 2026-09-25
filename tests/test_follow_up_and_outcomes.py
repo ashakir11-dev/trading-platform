@@ -175,3 +175,11 @@ async def test_profile_trigger_flows_to_follow_up():
     mw.record_decision(report.recommendations[0].candidate.id, True, opened_at=OPEN)
     event = (await mw.follow_up_loop().tick(bars[-1].ts))[0]
     assert event.tripwire.alerted and "traded through stop" in event.tripwire.reasons[0]
+
+
+async def test_action_needed_when_stop_hit():
+    mw, llm, store, pos, bars = await _setup([100, 95, 88])
+    event = (await mw.follow_up_loop().tick(bars[-1].ts))[0]
+    assert event.action_needed and "hit its stop" in event.action_needed
+    quiet = await _setup([100, 101, 102])
+    assert (await quiet[0].follow_up_loop().tick(quiet[4][-1].ts))[0].action_needed is None

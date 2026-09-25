@@ -77,6 +77,8 @@ class FollowUpEvent(BaseModel):
     ticker: str
     tripwire: TripwireResult
     review: FullReviewOutput | None = None
+    # Set when the user should act, e.g. close the position and run review_position.
+    action_needed: str | None = None
 
 
 class FollowUpLoop:
@@ -106,6 +108,15 @@ class FollowUpLoop:
         last_full = position.last_full_review_at or position.opened_at
         if tripwire.alerted or now - last_full >= self._config.full_review_interval:
             event.review = await self._full_review(position, tripwire, news, now)
+        if tripwire.alerted and bars:
+            stop_hit, target_hit = levels_hit(position.plan, bars[-1], self._config.profile.level_trigger)
+            if stop_hit or target_hit:
+                level = "stop" if stop_hit else "target"
+                event.action_needed = (f"{position.ticker} hit its {level}. If you exited, record it with "
+                                       f"close_position and then run review_position.")
+            elif event.review is not None and event.review.action == "exit":
+                event.action_needed = (f"Re-review recommends exiting {position.ticker}. If you exit, record it "
+                                       f"with close_position and then run review_position.")
         return event
 
     def _apply_cooldown(self, position: Position, tripwire: TripwireResult, now: datetime) -> None:
@@ -127,6 +138,7 @@ class FollowUpLoop:
     async def _full_review(self, position: Position, tripwire: TripwireResult, news: DataSnapshot,
                            now: datetime) -> FullReviewOutput:
         bundle = RawDataBundle(as_of=now)
+        bundle.extend(await self._data.macro.macro(now))
         for chart in HORIZONS[position.plan.horizon].charts:
             bundle.extend([
                 await self._data.prices.ohlcv(position.ticker, (now - chart.lookback).date(), now, chart.interval),
@@ -135,6 +147,7 @@ class FollowUpLoop:
             ])
         bundle.extend([
             await self._data.fundamentals.fundamentals(position.ticker, now),
+            await self._data.filings.recent_filings(position.ticker, position.opened_at, now),
             await self._data.news.upcoming_earnings(position.ticker, now),
             news,
         ])

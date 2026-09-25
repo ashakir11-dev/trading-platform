@@ -25,7 +25,8 @@ How to work:
   from your conclusion, with the specific raw-data evidence it rests on. Do not cite
   facts that are not in the provided data.
 - Consider foreseeable risks explicitly, including macro exposure (rates, FX,
-  commodities, index beta), sector, event and liquidity risk. Record how each was
+  commodities, index beta), sector, event and liquidity risk. Macro data, when
+  available, is in the raw data as "macro" snapshots. Record how each was
   weighed, even when it doesn't change the verdict.
 - Any snapshot marked UNAVAILABLE is a known data gap. Do not guess its contents; list
   it under data_gaps and lower confidence if it matters.

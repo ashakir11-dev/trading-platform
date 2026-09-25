@@ -257,3 +257,16 @@ async def test_second_decision_for_same_candidate_is_blocked():
     with pytest.raises(ValueError, match="already recorded"):
         mw.record_decision(cid, accepted=False)
     assert len(store.user_decisions()) == 1 and len(store.open_positions()) == 1
+
+
+async def test_macro_reaches_every_stage_and_filings_reach_company_stage():
+    from .fakes import FixtureFilings
+
+    filings = FixtureFilings()
+    filings.filings["AAA"] = [{"form": "8-K", "filed": "2026-05-20", "sec_items": ["2.02"], "title": "FILING-MARK"}]
+    mw, llm, _ = build(filings=filings)
+    await mw.run(AS_OF)
+    for output in (MarketScanOutput, SectorDeepDiveOutput, CompanyDeepDiveOutput, TechnicalOutput):
+        assert "MACRO-OK" in llm.prompts(output)[0]
+    company = next(p for p in llm.prompts(CompanyDeepDiveOutput) if "Company: AAA" in p)
+    assert "FILING-MARK" in company

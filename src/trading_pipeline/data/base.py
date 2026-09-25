@@ -160,9 +160,30 @@ class NewsCatalystProvider(Protocol):
 
 
 class FundamentalsProvider(Protocol):
-    """Financials, filings, ownership, valuation. No source chosen yet."""
+    """Financial statements, point-in-time by filing date. (Source: Equibles.)"""
 
     async def fundamentals(self, ticker: str, as_of: datetime) -> DataSnapshot: ...
+
+
+class FilingsProvider(Protocol):
+    """A company's recent SEC filings (10-K, 10-Q, 8-K, ...) as known at ``as_of``.
+
+    Payload: a list of dicts with ``form``, ``filed`` (ISO date/time), ``period``,
+    ``sec_items`` (8-K item numbers), ``title``/``summary`` and optional ``excerpt``.
+    Only filings made before ``as_of`` may appear. ``kind`` = "filings".
+    """
+
+    async def recent_filings(self, ticker: str, since: datetime, as_of: datetime) -> DataSnapshot: ...
+
+
+class MacroProvider(Protocol):
+    """Market-level macro data (rates, inflation, employment, FX, spreads) as known at ``as_of``.
+
+    Returns snapshots with ``subject`` = "market" so they reach every stage through the
+    relevant-subset filter. ``kind`` starts with "macro".
+    """
+
+    async def macro(self, as_of: datetime) -> list[DataSnapshot]: ...
 
 
 @dataclass
@@ -172,3 +193,5 @@ class DataProviders:
     sectors: SectorDataProvider
     news: NewsCatalystProvider
     fundamentals: FundamentalsProvider
+    filings: FilingsProvider
+    macro: MacroProvider

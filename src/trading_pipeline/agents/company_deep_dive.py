@@ -13,7 +13,8 @@ class CompanyDeepDive(StageAgent):
 Company Deep Dive. Decide whether this one company is fundamentally worth pursuing in
 the stated direction. Scrutinize every catalyst the sector stage cited: mark it
 verified, unverified (no supporting data) or contradicted (data says otherwise) against
-the raw data. Unverified catalysts must not carry the thesis. Do not consider the chart;
+the raw data, including the company's recent SEC filings (8-K item numbers show what
+was disclosed). Unverified catalysts must not carry the thesis. Do not consider the chart;
 technical tradeability is judged separately by another agent."""
 
     async def run(self, entry: ShortlistEntry, sector: SectorCall, bundle: RawDataBundle, *,
