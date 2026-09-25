@@ -44,7 +44,7 @@ def reasoning(summary: str = "ok", confidence: float = 0.7) -> StageReasoning:
 
 def plan(entry: float = 100.0, target: float = 120.0, stop: float = 90.0, direction="long") -> TradePlan:
     return TradePlan(direction=direction, entry_price=entry, entry_condition="close above", target_price=target,
-                     stop_loss=stop, horizon="swing", invalidation="close below stop")
+                     stop_loss=stop, horizon="swing", chart_timeframe="1d", invalidation="close below stop")
 
 
 def ticker_in(prompt: str) -> str:
@@ -123,25 +123,32 @@ def make_bars(closes: list[float], start: datetime) -> list[PriceBar]:
 class FixturePrices:
     def __init__(self, bars: dict[str, list[PriceBar]] | None = None) -> None:
         self.series = bars or {}
+        self.intervals: list[str] = []
 
-    async def bars(self, ticker: str, start: date, as_of: datetime) -> list[PriceBar]:
+    async def bars(self, ticker: str, start: date, as_of: datetime, interval: str = "1d") -> list[PriceBar]:
         return [b for b in self.series.get(ticker, []) if b.ts.date() >= start and b.ts <= as_of]
 
-    async def ohlcv(self, ticker: str, start: date, as_of: datetime) -> DataSnapshot:
-        bars = await self.bars(ticker, start, as_of)
-        return DataSnapshot(kind="ohlcv", source="fixture", subject=ticker, as_of=as_of,
+    async def ohlcv(self, ticker: str, start: date, as_of: datetime, interval: str = "1d") -> DataSnapshot:
+        self.intervals.append(interval)
+        bars = await self.bars(ticker, start, as_of, interval)
+        return DataSnapshot(kind=f"ohlcv:{interval}", source="fixture", subject=ticker, as_of=as_of,
                             payload=[b.model_dump(mode="json") for b in bars])
 
-    async def indicators(self, ticker: str, as_of: datetime) -> DataSnapshot:
-        return DataSnapshot(kind="indicators", source="fixture", subject=ticker, as_of=as_of, payload={"rsi": 55})
+    async def indicators(self, ticker: str, as_of: datetime, interval: str = "1d") -> DataSnapshot:
+        return DataSnapshot(kind=f"indicators:{interval}", source="fixture", subject=ticker, as_of=as_of,
+                            payload={"rsi": 55})
 
-    async def pivots(self, ticker: str, as_of: datetime) -> DataSnapshot:
-        return DataSnapshot(kind="pivots", source="fixture", subject=ticker, as_of=as_of, payload={"s1": 95})
+    async def pivots(self, ticker: str, as_of: datetime, interval: str = "1d") -> DataSnapshot:
+        return DataSnapshot(kind=f"pivots:{interval}", source="fixture", subject=ticker, as_of=as_of,
+                            payload={"s1": 95})
 
 
 class FixtureQuotes:
+    def __init__(self, price: float = 101.5) -> None:
+        self.price = price
+
     async def quote(self, ticker: str) -> DataSnapshot:
-        return DataSnapshot(kind="quote", source="fixture", subject=ticker, as_of=AS_OF, payload={"price": 101.5})
+        return DataSnapshot(kind="quote", source="fixture", subject=ticker, as_of=AS_OF, payload={"price": self.price})
 
     async def positions(self) -> DataSnapshot:
         return DataSnapshot(kind="positions", source="fixture", subject="account", as_of=AS_OF, payload=[])
@@ -167,8 +174,13 @@ class FixtureSectors:
 
 
 class FixtureNews:
-    def __init__(self) -> None:
+    def __init__(self, earnings: dict[str, str | None] | None = None) -> None:
         self.events_by_subject: dict[str, list] = {}
+        self.earnings = earnings or {}
+
+    async def upcoming_earnings(self, ticker: str, as_of: datetime) -> DataSnapshot:
+        return DataSnapshot(kind="earnings_calendar", source="fixture", subject=ticker, as_of=as_of,
+                            payload={"next_earnings_date": self.earnings.get(ticker), "confirmed": True})
 
     async def events(self, subject: str, since: datetime, as_of: datetime) -> DataSnapshot:
         items = [e for e in self.events_by_subject.get(subject, []) if since < e["ts"] <= as_of]

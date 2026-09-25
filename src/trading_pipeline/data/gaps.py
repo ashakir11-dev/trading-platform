@@ -31,6 +31,9 @@ class UnavailableNews:
     async def events(self, subject: str, since: datetime, as_of: datetime) -> DataSnapshot:
         return _gap("news_catalysts", subject, as_of, "OPEN GAP: no dated news/catalyst archive.")
 
+    async def upcoming_earnings(self, ticker: str, as_of: datetime) -> DataSnapshot:
+        return _gap("earnings_calendar", ticker, as_of, "OPEN GAP: no earnings calendar source.")
+
 
 class UnavailableFundamentals:
     async def fundamentals(self, ticker: str, as_of: datetime) -> DataSnapshot:

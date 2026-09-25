@@ -107,14 +107,16 @@ class PriceDataProvider(Protocol):
     """Historical OHLCV, indicators, pivots. (Candidate: Massive.com MCP.)
 
     ``ohlcv``/``indicators``/``pivots`` return raw snapshots for agent prompts;
-    ``bars`` returns typed daily bars for deterministic code (tripwires, outcomes).
+    ``bars`` returns typed bars for deterministic code (tripwires, outcomes, rules).
+    ``interval`` is "1h", "1d" or "1w" (see profile.HORIZONS). Snapshot ``kind`` is
+    suffixed with the interval, e.g. "ohlcv:1d".
     """
 
-    async def bars(self, ticker: str, start: date, as_of: datetime) -> list[PriceBar]: ...
+    async def bars(self, ticker: str, start: date, as_of: datetime, interval: str = "1d") -> list[PriceBar]: ...
 
-    async def ohlcv(self, ticker: str, start: date, as_of: datetime) -> DataSnapshot: ...
-    async def indicators(self, ticker: str, as_of: datetime) -> DataSnapshot: ...
-    async def pivots(self, ticker: str, as_of: datetime) -> DataSnapshot: ...
+    async def ohlcv(self, ticker: str, start: date, as_of: datetime, interval: str = "1d") -> DataSnapshot: ...
+    async def indicators(self, ticker: str, as_of: datetime, interval: str = "1d") -> DataSnapshot: ...
+    async def pivots(self, ticker: str, as_of: datetime, interval: str = "1d") -> DataSnapshot: ...
 
 
 class QuoteProvider(Protocol):
@@ -141,9 +143,20 @@ class SectorDataProvider(Protocol):
 
 
 class NewsCatalystProvider(Protocol):
-    """Dated news and catalyst events (earnings, FDA, analyst actions). OPEN GAP (esp. historical)."""
+    """Dated news and catalyst events (earnings, FDA, analyst actions). OPEN GAP (esp. historical).
+
+    ``events`` payload: a list of event dicts. Recognised keys (all optional except
+    ``ts`` and ``headline``): ``ts`` (ISO time), ``headline``, ``category`` (e.g.
+    "earnings", "fda", "m_and_a", "analyst_rating_change", "price_action"),
+    ``source``, ``sec_form`` (e.g. "8-K"), ``sec_items`` (e.g. ["2.02"]), ``url``.
+    ``rules.is_material`` uses these to separate material news from noise.
+
+    ``upcoming_earnings`` payload: ``{"next_earnings_date": "YYYY-MM-DD" | None,
+    "confirmed": bool}`` as known at ``as_of``.
+    """
 
     async def events(self, subject: str, since: datetime, as_of: datetime) -> DataSnapshot: ...
+    async def upcoming_earnings(self, ticker: str, as_of: datetime) -> DataSnapshot: ...
 
 
 class FundamentalsProvider(Protocol):

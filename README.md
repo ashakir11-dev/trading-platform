@@ -14,6 +14,8 @@ The design, its principles and its open decisions are in [`docs/ARCHITECTURE.md`
 src/trading_pipeline/
   config.py            PipelineConfig / LLMConfig (open decisions are config switches)
   schemas.py           stage outputs (structured reasoning), records, positions
+  profile.py           investor profile + horizon -> chart timeframes
+  rules.py             deterministic rules (plan checks, stale entry, earnings flag, news filter)
   llm.py               LLMClient protocol + AnthropicLLM (structured outputs)
   middleware.py        runs the stages, carries raw data forward, logs reasoning, user boundary
   store.py             SQLite: reasoning logs, snapshots, positions, reviews, isolated user decisions
@@ -24,6 +26,11 @@ src/trading_pipeline/
   agents/              one module per agent
 tests/                 scripted-LLM + fixture-data tests
 ```
+
+## Investor profile
+
+Copy `profile.example.json`, edit it, and load it with
+`PipelineConfig(profile=InvestorProfile.load("my-profile.json"))`.
 
 ## Dev
 

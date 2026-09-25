@@ -7,6 +7,8 @@ from typing import Literal
 
 from pydantic import BaseModel
 
+from .profile import InvestorProfile
+
 
 class LLMConfig(BaseModel):
     model: str = "claude-opus-5"
@@ -32,8 +34,18 @@ class PipelineConfig(BaseModel):
     # Max concurrent LLM calls within a stage.
     max_parallel: int = 8
 
-    # Agent 5 cadence.
+    # Who the pipeline works for (risk, horizons, directions); used by the technical
+    # agent, the plan rules and Agent 5.
+    profile: InvestorProfile = InvestorProfile()
+
+    # Rules. A plan is stale when price has already run past its entry by more than this
+    # (or is already through its stop) when the report is produced.
+    stale_entry_max_drift_pct: float = 3.0
+
+    # Agent 5 cadence. After an alert, further alerts for that position are held for
+    # alert_cooldown; anything that trips meanwhile is delivered once it expires.
     full_review_interval: timedelta = timedelta(days=14)
+    alert_cooldown: timedelta = timedelta(hours=12)
 
     # Backtests must not tune on data at/after this date (overfitting guard).
     holdout_start: date | None = None

@@ -58,7 +58,7 @@ async def test_raw_data_passes_through_to_later_stages():
     tech_prompt = next(p for p in llm.prompts(TechnicalOutput) if "Company: AAA" in p)
     # Upstream raw data (sector breadth from Agent 1's inputs, market data from Agent 0,
     # the fundamentals gap from the company stage) reaches the technical agent.
-    for kind in ("sector_breadth", "sector_performance", "fundamentals", "ohlcv"):
+    for kind in ("sector_breadth", "sector_performance", "fundamentals", "ohlcv:1d", "ohlcv:1w", "earnings_calendar"):
         assert f'"kind": "{kind}"' in tech_prompt
     assert "UNAVAILABLE" in tech_prompt  # gaps are explicit, not silently empty
 
@@ -177,3 +177,73 @@ async def test_improvements_reach_prompts_only_after_approval():
 
 def test_improvement_note_defaults_unapproved():
     assert ImprovementNote(source_position_id="p", target_stage=Stage.TECHNICAL, text="t").approved is False
+
+
+# ------------------------------------------------------------------------------------
+# Investor profile, rules and conflicts
+# ------------------------------------------------------------------------------------
+
+from trading_pipeline.profile import InvestorProfile  # noqa: E402
+from trading_pipeline.schemas import SectorCall, TradePlan  # noqa: E402
+
+from .fakes import FixtureNews, FixtureQuotes, plan, reasoning  # noqa: E402
+
+
+async def test_technical_agent_gets_profile_and_horizon_charts():
+    prices = FixturePrices()
+    mw, llm, _ = build(PipelineConfig(profile=InvestorProfile(horizons=["short_term", "swing"])), prices=prices)
+    await mw.run(AS_OF)
+    prompt = next(p for p in llm.prompts(TechnicalOutput) if "Company: AAA" in p)
+    assert "<investor_profile>" in prompt and '"min_reward_to_risk": 2.0' in prompt
+    assert {"1h", "1d", "1w"} <= set(prices.intervals)
+
+
+async def test_rule_rejections_are_logged():
+    mw, llm, store = build()
+    llm.handlers[TechnicalOutput] = lambda p: TechnicalOutput(
+        ticker="AAA", verdict="pass", setup="s", plan=plan(target=115), reasoning=reasoning())  # 1.5:1
+    report = await mw.run(AS_OF)
+    assert report.recommendations == []
+    rej = next(x for x in report.rejections if x.ticker == "AAA")
+    assert rej.stage == Stage.TECHNICAL and "reward_to_risk" in rej.summary
+    rec = next(r for r in store.stage_records(run_id=report.run_id)
+               if r.stage == Stage.TECHNICAL and r.subject == "AAA")
+    assert rec.verdict == "rejected_by_rule"
+    assert {r.rule: r.outcome for r in rec.rules}["reward_to_risk"] == "reject"
+
+
+async def test_stale_entry_rejected():
+    mw, _, _ = build(quotes=FixtureQuotes(price=106.0))  # entry 100, limit 3%
+    report = await mw.run(AS_OF)
+    assert report.recommendations == []
+    assert any("stale_entry" in x.summary for x in report.rejections)
+
+
+async def test_backtest_stale_check_uses_last_close():
+    bars = make_bars([101.0], AS_OF - timedelta(days=1))
+    mw, _, _ = build(prices=FixturePrices({"AAA": bars}))
+    report = await mw.run(AS_OF, live=False)
+    assert [r.candidate.ticker for r in report.recommendations] == ["AAA"]
+
+
+async def test_upcoming_earnings_flagged():
+    mw, _, _ = build(news=FixtureNews(earnings={"AAA": "2026-06-20"}))
+    report = await mw.run(AS_OF)
+    flags = {f.rule: f.message for f in report.recommendations[0].flags}
+    assert "upcoming_earnings" in flags and "2026-06-20" in flags["upcoming_earnings"]
+    assert "⚠ upcoming_earnings" in render_report(report)
+
+
+async def test_conflicts_always_recorded_and_short_blocked_by_profile():
+    mw, llm, store = build()
+    llm.handlers[MarketScanOutput] = lambda p: MarketScanOutput(market_summary="mixed", sectors=[
+        SectorCall(sector="Biotech", direction="upside", thesis="t", reasoning=reasoning()),
+        SectorCall(sector="Pharma", direction="downside", thesis="t", reasoning=reasoning()),
+    ])
+    report = await mw.run(AS_OF)
+    conflicts = {(c.ticker, c.kind) for c in report.conflicts}
+    assert ("AAA", "direction_conflict") in conflicts and ("BBB", "direction_conflict") in conflicts
+    assert len(store.conflicts(report.run_id)) == len(report.conflicts)
+    # The downside (short) entries are rejected by the long-only default profile.
+    assert any(x.stage == Stage.SECTOR_DEEP_DIVE and "profile_short" in x.summary for x in report.rejections)
+    assert "Conflicts (" in render_report(report)

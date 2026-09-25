@@ -32,27 +32,32 @@ class MassivePriceData:
     def __init__(self, mcp: McpToolCaller) -> None:
         self._mcp = mcp
 
+    # interval -> (multiplier, timespan) in Massive/Polygon aggregate terms.
+    _SPANS = {"1h": (1, "hour"), "1d": (1, "day"), "1w": (1, "week")}
+
     async def _snapshot(self, kind: str, tool: str, ticker: str, as_of: datetime, args: dict[str, Any]) -> DataSnapshot:
         payload = await self._mcp.call_tool(tool, args)
         return DataSnapshot(kind=kind, source="massive", subject=ticker, as_of=as_of, payload=payload)
 
-    async def ohlcv(self, ticker: str, start: date, as_of: datetime) -> DataSnapshot:
+    async def ohlcv(self, ticker: str, start: date, as_of: datetime, interval: str = "1d") -> DataSnapshot:
         # Request data only up to as_of so backtests can't see the future.
-        args = {"ticker": ticker, "from": start.isoformat(), "to": as_of.date().isoformat(), "timespan": "day"}
-        return await self._snapshot("ohlcv", self.TOOL_OHLCV, ticker, as_of, args)
+        mult, span = self._SPANS[interval]
+        args = {"ticker": ticker, "from": start.isoformat(), "to": as_of.date().isoformat(),
+                "multiplier": mult, "timespan": span}
+        return await self._snapshot(f"ohlcv:{interval}", self.TOOL_OHLCV, ticker, as_of, args)
 
-    async def bars(self, ticker: str, start: date, as_of: datetime) -> list[PriceBar]:
-        snap = await self.ohlcv(ticker, start, as_of)
+    async def bars(self, ticker: str, start: date, as_of: datetime, interval: str = "1d") -> list[PriceBar]:
+        snap = await self.ohlcv(ticker, start, as_of, interval)
         # TODO: parse the Massive OHLCV payload shape into PriceBar rows.
         raise NotImplementedError(f"parse Massive OHLCV payload into PriceBar: {type(snap.payload)!r}")
 
-    async def indicators(self, ticker: str, as_of: datetime) -> DataSnapshot:
-        args = {"ticker": ticker, "as_of": as_of.date().isoformat()}
-        return await self._snapshot("indicators", self.TOOL_INDICATORS, ticker, as_of, args)
+    async def indicators(self, ticker: str, as_of: datetime, interval: str = "1d") -> DataSnapshot:
+        args = {"ticker": ticker, "as_of": as_of.date().isoformat(), "timespan": self._SPANS[interval][1]}
+        return await self._snapshot(f"indicators:{interval}", self.TOOL_INDICATORS, ticker, as_of, args)
 
-    async def pivots(self, ticker: str, as_of: datetime) -> DataSnapshot:
-        args = {"ticker": ticker, "as_of": as_of.date().isoformat()}
-        return await self._snapshot("pivots", self.TOOL_PIVOTS, ticker, as_of, args)
+    async def pivots(self, ticker: str, as_of: datetime, interval: str = "1d") -> DataSnapshot:
+        args = {"ticker": ticker, "as_of": as_of.date().isoformat(), "timespan": self._SPANS[interval][1]}
+        return await self._snapshot(f"pivots:{interval}", self.TOOL_PIVOTS, ticker, as_of, args)
 
 
 class RobinhoodQuotes:

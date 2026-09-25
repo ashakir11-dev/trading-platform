@@ -7,7 +7,7 @@ and adds the implementation decisions made during scaffolding (see
 [Implementation decisions](#implementation-decisions)).
 
 The design started as an extension of the dual-MCP stock agent (Massive.com + Robinhood),
-but **those providers are not locked in** (see §5). It is a
+but **those providers are not locked in** (see §6). It is a
 **research and decision-support system**. It never places orders. A human makes
 every go/no-go call.
 
@@ -51,9 +51,9 @@ Step-by-step runtime flow (sequence diagrams): [`sequence-diagrams.md`](sequence
 | Agent 0: Market Scanner | `agents/market_scanner.py` | once per run | raw market and sector data | sectors with upside/downside potential |
 | Agent 1: Sector Deep Dive | `agents/sector_deep_dive.py` | one per sector, in parallel | sector call + **bulk screen of every company in the sector** (key ratios, size, recent filings/events) + sector breadth, news, FDA, earnings | shortlist of ~10-30 companies, **ranked by potential score** |
 | Company Deep Dive | `agents/company_deep_dive.py` | one per company, in parallel | shortlist entry + market/sector data + **full company data** (fundamentals, filings, company news) | worthiness verdict; catalysts checked |
-| Technical Analysis | `agents/technical_analysis.py` | one per company, in parallel, **no cross-comparison** | candidate + raw price/indicator/pivot data | chart verdict + entry / exit / stop-loss, or rejection |
+| Technical Analysis | `agents/technical_analysis.py` | one per company, in parallel, **no cross-comparison** | candidate + **investor profile** + price/indicator/pivot data **for each chart timeframe the investor's horizons need** + earnings calendar | chart verdict + entry / exit / stop-loss / horizon / chart timeframe, or rejection; then **deterministic rules** check the plan |
 | Middleware | `middleware.py` | orchestrates | | report to the user |
-| Agent 5: Follow-Up | `agents/follow_up.py` | on a schedule, per accepted position | position + fresh data | cheap tripwire checks, plus a deep full re-review at an interval |
+| Agent 5: Follow-Up | `agents/follow_up.py` | on a schedule, per accepted position | position + investor profile + fresh data | cheap tripwire checks (price vs stop/target, **material** news only) with a **12h alert cooldown**, plus a deep full re-review on alert or at an interval |
 | Outcomes Agent | `agents/outcomes.py` | per closed/marked position | price history | financial results only; **deterministic, no LLM, no judgment** |
 | Process Agent | `agents/process_review.py` | per position | every stage's reasoning trail + outcome | per-stage reasoning-quality grades, foreseeable-risk check, improvement signals |
 
@@ -87,7 +87,59 @@ Step-by-step runtime flow (sequence diagrams): [`sequence-diagrams.md`](sequence
 7. **Swing or long-term horizons only, never day trading.** Cross-stage data
    staleness is therefore not a concern.
 
-## 4. Design decisions
+## 4. Investor profile, horizons and rules
+
+**Investor profile** (`profile.py`, `PipelineConfig.profile`, example in
+`profile.example.json`): who the pipeline works for, including risk tolerance, allowed
+holding horizons, whether shorts are allowed, maximum loss per trade, minimum
+reward:risk, target return, and free-text notes. It is the user's *preferences*, set up
+front, not a decision, so showing it to agents does not break the one-way middleware
+principle. The technical agent and Agent 5's full review read it, and the rules
+enforce it.
+
+**Horizons and chart timeframes.** Each horizon has its own charts; the technical
+agent reads levels from the primary chart and trend from the context chart, and the
+middleware fetches every timeframe the profile's horizons need.
+
+| Horizon | Typical hold | Primary chart | Context chart | Earnings flag window |
+|---|---|---|---|---|
+| `short_term` | days to ~2 weeks | 1h, 30 days | 1d, 6 months | 14 days |
+| `swing` | weeks to ~3 months | 1d, 1 year | 1w, 2 years | 45 days |
+| `long_term` | months to years | 1w, 5 years | 1d, 1 year | 30 days |
+
+Day trading is **not** supported: it conflicts with principle 7 (intraday data goes
+stale while the pipeline runs). Adding it would need a decision to change that principle.
+
+**Deterministic rules** (`rules.py`). Rules never make judgment calls: they catch
+mechanical errors, enforce the profile and flag known risks. Every result is logged on
+the stage record (`StageRecord.rules`), so the process agent can tell a rule veto from a
+judgment failure. `reject` removes the candidate; `flag` warns the user in the report.
+
+| Rule | Outcome | When |
+|---|---|---|
+| `plan_price_order` | reject | long needs stop < entry < target; short the reverse |
+| `profile_horizon` | reject | plan horizon not in the profile's horizons |
+| `chart_timeframe` | flag | plan levels not read from the horizon's primary chart |
+| `profile_short` | reject | short plan (or downside sector call at Agent 1) when shorts are not allowed |
+| `max_loss` | reject | stop further from entry than `max_loss_per_trade_pct` |
+| `reward_to_risk` | reject | reward:risk below `min_reward_to_risk` |
+| `stale_entry` | reject | price already more than `stale_entry_max_drift_pct` (3%) past the entry, or through the stop. Live runs use the live quote; backtests use the last close at `as_of`. A price that hasn't reached the entry yet is fine. |
+| `upcoming_earnings` | flag | earnings inside the horizon's window, or the date is unknown |
+
+**Conflicts** (`Conflict`, `PipelineReport.conflicts`): when the same ticker comes from
+more than one sector call, it is **always recorded**, as `direction_conflict` (opposite
+directions) or `duplicate`. The first surfacing advances; the record is stored and shown
+in the report.
+
+**Alerts** (Agent 5). A tripwire fires on price crossing the stop or target (on the
+daily close), or on **material** news. `rules.is_material` keeps SEC 8-Ks with material
+items (e.g. 1.01, 2.02, 5.02), earnings, guidance, FDA, M&A, rating changes, offerings,
+legal and leadership news, and drops price-action chatter, reiterations and listicles.
+Each alert triggers a full re-review. After an alert, further alerts for the same
+position are **held for 12 hours** (`alert_cooldown`). Anything that trips meanwhile is
+recorded and delivered with the next alert, so nothing material is lost.
+
+## 5. Design decisions
 
 **Decided (2026-09-25):**
 
@@ -105,11 +157,15 @@ Step-by-step runtime flow (sequence diagrams): [`sequence-diagrams.md`](sequence
   prices must be survivorship-free and fundamentals point-in-time; a simulated decision
   policy must be stored apart from real user decisions; any broker paper-trading
   integration would relax the no-orders rule and needs an explicit decision.
+- **Day trading** as a horizon: needs a decision to change principle 7.
+- **Stop definition:** Agent 5 alerts on the daily *close* crossing the stop, while the
+  outcomes agent counts a stop as hit on the intraday *low*. These should be unified.
+- **Proposed rules:** liquidity floor, sector concentration across recommendations.
 - **Proposed, not decided:** keep our own daily snapshots of scheduled-event calendars
   (earnings, FDA), since no affordable source records past expected dates; and add new
   8-K filings (e.g. items 2.02, 5.02, 1.01) as an Agent 5 tripwire.
 
-## 5. Data requirements
+## 6. Data requirements
 
 Every category needs a **live** version (to run the system) and a **deep
 historical, point-in-time** version (to backtest it honestly):
@@ -179,7 +235,7 @@ Their snapshots carry `is_gap=True`, so agents are told the data is missing
 rather than silently seeing nothing, and the process agent can separate "bad
 reasoning" from "no data".
 
-## 6. Overall assessment (from the design discussion)
+## 7. Overall assessment (from the design discussion)
 
 - The architecture is sound. Whether it makes money is **unknown and must not
   be assumed**. The design's value is that it is honest and falsifiable.
@@ -203,8 +259,10 @@ Choices made while scaffolding. Each one is easy to revisit.
 | Agent 1 format (**decided: ranked**) | The schema records **both** a `potential_score` (0-100) and a `passed` flag per company, so both are always logged. `PipelineConfig.shortlist_mode` defaults to `"ranked"`; `"pass_fail"` remains available. | `schemas.py`, `middleware.py` |
 | Confidence score (**decided: attribution only**) | Every stage emits a 0-1 `confidence` for each candidate. It is stored as a trajectory on the `Candidate` (`confidence_trajectory`) and used for attribution. **It gates nothing by default** (`confidence_gate=None`), and **downstream agents don't see upstream confidence numbers by default** (`show_upstream_confidence=False`) to avoid anchoring. | `schemas.py`, `middleware.py` |
 | Agent 1 bulk screen | `SectorDataProvider.sector_screen` returns one `screen` snapshot per company (subject = ticker). The company deep dive filters the sector bundle to market + sector + its own ticker before adding full company data. | `data/base.py`, `middleware.py` |
+| Investor profile & rules | `InvestorProfile` in config; `rules.py` holds all deterministic checks as pure functions; results are logged per stage record and shown as flags in the report. | `profile.py`, `rules.py`, `middleware.py` |
+| Alerts | Material-news filter plus 12h per-position cooldown with held reasons delivered later. | `rules.py`, `agents/follow_up.py` |
 | Point-in-time data | Every provider call takes `as_of`. `RawDataBundle.add` rejects a snapshot dated after the run's `as_of`, which guards against look-ahead in backtests. | `data/base.py` |
-| Data access | The middleware fetches data through provider interfaces, not the agents. Vendors are not decided (§5). `data/mcp.py` holds skeleton adapters for the original candidates (Massive, Robinhood) behind a small `McpToolCaller` protocol; the tool-name mapping is TODO. Any other vendor is a new adapter that implements the same protocols. Any quotes/account adapter must have **no order methods**. | `data/base.py`, `data/mcp.py` |
+| Data access | The middleware fetches data through provider interfaces, not the agents. Vendors are not decided (§6). `data/mcp.py` holds skeleton adapters for the original candidates (Massive, Robinhood) behind a small `McpToolCaller` protocol; the tool-name mapping is TODO. Any other vendor is a new adapter that implements the same protocols. Any quotes/account adapter must have **no order methods**. | `data/base.py`, `data/mcp.py` |
 | User decisions | Stored in a separate table. `Store.review_trail()` (what the process agent reads) never includes them. | `store.py` |
 | Outcomes agent | Plain deterministic code, no LLM, so "no judgment" holds by construction. | `agents/outcomes.py` |
 | Process → Agent 0 improvement | Improvement signals are stored as `ImprovementNote`s with `approved=False`. Only human-approved notes are injected into stage prompts. This guards against the loop overfitting to recent outcomes. | `agents/process_review.py`, `agents/base.py` |

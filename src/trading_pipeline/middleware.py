@@ -23,9 +23,11 @@ from .agents.technical_analysis import TechnicalAnalyst
 from .config import PipelineConfig
 from .data.base import DataProviders, DataSnapshot, RawDataBundle
 from .llm import LLMClient
+from .rules import check_earnings, check_plan, check_stale_entry
 from .schemas import (
     Candidate,
     CompanyDeepDiveOutput,
+    Conflict,
     ImprovementNote,
     OutcomeReport,
     PipelineReport,
@@ -33,6 +35,7 @@ from .schemas import (
     ProcessReviewOutput,
     Recommendation,
     Rejection,
+    RuleResult,
     SectorCall,
     ShortlistEntry,
     Stage,
@@ -48,9 +51,6 @@ from .store import Store
 log = logging.getLogger(__name__)
 
 T = TypeVar("T")
-
-PRICE_LOOKBACK = timedelta(days=365)
-
 
 class Middleware:
     def __init__(self, config: PipelineConfig, llm: LLMClient, data: DataProviders, store: Store) -> None:
@@ -107,7 +107,9 @@ class Middleware:
             return self._select_shortlist(out.shortlist), bundle
 
         candidates: list[tuple[Candidate, SectorCall, RawDataBundle]] = []
-        seen: set[str] = set()
+        conflicts: list[Conflict] = []
+        surfaced: dict[str, tuple[str, str]] = {}  # ticker -> first (sector, direction)
+        advanced: set[str] = set()
         results = await asyncio.gather(*(sector_pass(c) for c in scan.sectors), return_exceptions=True)
         for call, result in zip(scan.sectors, results):
             if isinstance(result, BaseException):
@@ -119,12 +121,31 @@ class Middleware:
                 self._log(run_id, Stage.SECTOR_DEEP_DIVE, entry.ticker, "not_forwarded", entry.reasoning,
                           entry, bundle, as_of)
             for entry in forward:
-                if entry.ticker in seen:
+                direction = "long" if call.direction == "upside" else "short"
+                # Same ticker from several sector calls: always record it; opposite
+                # directions are a conflict, same direction a duplicate. First one advances.
+                first = surfaced.setdefault(entry.ticker, (call.sector, direction))
+                if first != (call.sector, direction):
+                    conflict = Conflict(
+                        run_id=run_id, ticker=entry.ticker,
+                        kind="direction_conflict" if first[1] != direction else "duplicate",
+                        first_sector=first[0], first_direction=first[1],
+                        other_sector=call.sector, other_direction=direction)
+                    conflicts.append(conflict)
+                    self._store.save_conflict(conflict)
+                if direction == "short" and not cfg.profile.allow_short:
+                    rule = RuleResult(rule="profile_short", outcome="reject",
+                                      message="investor profile does not allow short positions")
+                    self._log(run_id, Stage.SECTOR_DEEP_DIVE, entry.ticker, "rejected_by_rule", entry.reasoning,
+                              entry, bundle, as_of, rules=[rule])
+                    rejections.append(Rejection(ticker=entry.ticker, stage=Stage.SECTOR_DEEP_DIVE,
+                                                summary=f"rule {rule.rule}: {rule.message}"))
                     continue
-                seen.add(entry.ticker)
+                if entry.ticker in advanced:
+                    continue
+                advanced.add(entry.ticker)
                 cand = Candidate(run_id=run_id, ticker=entry.ticker, company_name=entry.company_name,
-                                 sector=call.sector, direction="long" if call.direction == "upside" else "short",
-                                 shortlist=entry)
+                                 sector=call.sector, direction=direction, shortlist=entry)
                 cand.record_confidence(Stage.SECTOR_DEEP_DIVE, entry.reasoning.confidence)
                 self._log(run_id, Stage.SECTOR_DEEP_DIVE, entry.ticker, "forwarded", entry.reasoning, entry,
                           bundle, as_of, candidate_id=cand.id)
@@ -158,14 +179,19 @@ class Middleware:
         # -- Technical analysis: independent per company, no cross-comparison ---------------
         async def technical_pass(cand: Candidate, company: CompanyDeepDiveOutput, upstream: RawDataBundle):
             bundle = RawDataBundle(as_of=as_of, snapshots=list(upstream.snapshots))
-            bundle.extend([
-                await self._data.prices.ohlcv(cand.ticker, (as_of - PRICE_LOOKBACK).date(), as_of),
-                await self._data.prices.indicators(cand.ticker, as_of),
-                await self._data.prices.pivots(cand.ticker, as_of),
-            ])
+            # One chart per timeframe the investor's horizons need (e.g. swing: 1d + 1w).
+            for chart in cfg.profile.charts():
+                bundle.extend([
+                    await self._data.prices.ohlcv(cand.ticker, (as_of - chart.lookback).date(), as_of, chart.interval),
+                    await self._data.prices.indicators(cand.ticker, as_of, chart.interval),
+                    await self._data.prices.pivots(cand.ticker, as_of, chart.interval),
+                ])
+            earnings = await self._data.news.upcoming_earnings(cand.ticker, as_of)
+            bundle.add(earnings)
             self._store.save_snapshots(bundle.snapshots)
-            out = await self._limited(tech_agent.run(cand, company, bundle, show_confidence=show_conf))
-            return out, bundle
+            out = await self._limited(tech_agent.run(cand, company, bundle, profile=cfg.profile,
+                                                     show_confidence=show_conf))
+            return out, bundle, earnings
 
         recommendations: list[Recommendation] = []
         results = await asyncio.gather(*(technical_pass(*s) for s in survivors), return_exceptions=True)
@@ -173,23 +199,42 @@ class Middleware:
             if isinstance(result, BaseException):
                 self._fail(cand, Stage.TECHNICAL, result, rejections)
                 continue
-            out, bundle = result
+            out, bundle, earnings = result
             verdict = out.verdict
             if verdict == "pass" and out.plan is None:
                 log.warning("technical pass without a plan for %s; treating as reject", cand.ticker)
                 verdict = "reject"
+
+            rules: list[RuleResult] = []
+            quote = None
+            if verdict == "pass":
+                quote = await self._live_quote(cand.ticker) if live else None
+                price, source = (quote, "live") if quote is not None else (await self._last_close(cand.ticker, as_of), "last close")
+                rules = [*check_plan(out.plan, cfg.profile),
+                         check_stale_entry(out.plan, price, cfg.stale_entry_max_drift_pct, source=source),
+                         check_earnings(out.plan, earnings, as_of)]
+                if any(r.outcome == "reject" for r in rules):
+                    verdict = "rejected_by_rule"
+
             self._log(run_id, Stage.TECHNICAL, cand.ticker, verdict, out.reasoning, out, bundle, as_of,
-                      candidate_id=cand.id)
+                      candidate_id=cand.id, rules=rules)
+            if verdict == "rejected_by_rule":
+                cand.record_confidence(Stage.TECHNICAL, out.reasoning.confidence)
+                cand.reject(Stage.TECHNICAL)
+                msgs = "; ".join(f"rule {r.rule}: {r.message}" for r in rules if r.outcome == "reject")
+                rejections.append(Rejection(ticker=cand.ticker, stage=Stage.TECHNICAL, summary=msgs))
+                continue
             if self._advance(cand, Stage.TECHNICAL, verdict, out.reasoning, rejections):
                 cand.status = "recommended"
-                quote = await self._live_quote(cand.ticker) if live else None
-                recommendations.append(Recommendation(candidate=cand, company=company, technical=out, live_quote=quote))
+                recommendations.append(Recommendation(
+                    candidate=cand, company=company, technical=out, live_quote=quote,
+                    flags=[r for r in rules if r.outcome == "flag"]))
 
         for cand, _, _ in candidates:
             self._store.save_candidate(cand)
 
         return PipelineReport(run_id=run_id, as_of=as_of, market=scan, recommendations=recommendations,
-                              rejections=rejections)
+                              rejections=rejections, conflicts=conflicts)
 
     def _select_shortlist(self, shortlist: list[ShortlistEntry]) -> tuple[list[ShortlistEntry], list[ShortlistEntry]]:
         """Apply the Agent 1 format decision (ranked by default). Returns (forwarded, not forwarded)."""
@@ -219,11 +264,17 @@ class Middleware:
         rejections.append(Rejection(ticker=cand.ticker, stage=stage, summary=f"error: {err}"))
 
     def _log(self, run_id: str, stage: Stage, subject: str, verdict: str, reasoning: StageReasoning, output,
-             bundle: RawDataBundle, as_of: datetime, *, candidate_id: str | None = None) -> None:
+             bundle: RawDataBundle, as_of: datetime, *, candidate_id: str | None = None,
+             rules: list[RuleResult] | None = None) -> None:
         self._store.save_stage_record(StageRecord(
             run_id=run_id, stage=stage, subject=subject, candidate_id=candidate_id, verdict=verdict,
-            reasoning=reasoning, output=output.model_dump(mode="json"), raw_data_ids=bundle.ids, as_of=as_of,
+            reasoning=reasoning, output=output.model_dump(mode="json"), raw_data_ids=bundle.ids,
+            rules=rules or [], as_of=as_of,
         ))
+
+    async def _last_close(self, ticker: str, as_of: datetime) -> float | None:
+        bars = await self._data.prices.bars(ticker, (as_of - timedelta(days=10)).date(), as_of, "1d")
+        return bars[-1].close if bars else None
 
     async def _live_quote(self, ticker: str) -> float | None:
         try:
@@ -314,11 +365,17 @@ def render_report(report: PipelineReport) -> str:
         ]
         if p:
             lines.append(f"    plan:   entry {p.entry_price} ({p.entry_condition}), target {p.target_price}, "
-                         f"stop {p.stop_loss}, {p.horizon}")
+                         f"stop {p.stop_loss}, {p.horizon} ({p.chart_timeframe} chart)")
         if r.live_quote is not None:
             lines.append(f"    live quote: {r.live_quote}")
+        for f in r.flags:
+            lines.append(f"    ⚠ {f.rule}: {f.message}")
         lines.append(f"    confidence trajectory: {traj}")
     lines += ["", f"Rejected ({len(report.rejections)}):"]
     lines += [f"- {x.ticker} at {x.stage.value}: {x.summary}" for x in report.rejections]
+    if report.conflicts:
+        lines += ["", f"Conflicts ({len(report.conflicts)}):"]
+        lines += [f"- {c.ticker}: {c.kind} — {c.first_sector} ({c.first_direction}) vs "
+                  f"{c.other_sector} ({c.other_direction})" for c in report.conflicts]
     lines += ["", "You make the call. Record it with Middleware.record_decision()."]
     return "\n".join(lines)

@@ -15,6 +15,7 @@ from pydantic import BaseModel
 from .data.base import DataSnapshot
 from .schemas import (
     Candidate,
+    Conflict,
     ImprovementNote,
     OutcomeReport,
     Position,
@@ -127,9 +128,19 @@ class Store:
     def save_tripwire(self, t: TripwireResult) -> None:
         self._put("tripwire", t, id=f"{t.position_id}:{t.checked_at.isoformat()}", position_id=t.position_id)
 
-    def last_tripwire(self, position_id: str) -> TripwireResult | None:
+    def tripwires(self, position_id: str) -> list[TripwireResult]:
         rows = self._query("tripwire", TripwireResult, "position_id=?", (position_id,))
-        return max(rows, key=lambda t: t.checked_at) if rows else None
+        return sorted(rows, key=lambda t: t.checked_at)
+
+    def last_tripwire(self, position_id: str) -> TripwireResult | None:
+        rows = self.tripwires(position_id)
+        return rows[-1] if rows else None
+
+    def save_conflict(self, c: Conflict) -> None:
+        self._put("conflict", c, id=f"{c.run_id}:{c.ticker}:{c.other_sector}", run_id=c.run_id)
+
+    def conflicts(self, run_id: str) -> list[Conflict]:
+        return self._query("conflict", Conflict, "run_id=?", (run_id,))
 
     def save_outcome(self, o: OutcomeReport) -> None:
         self._put("outcome", o, id=o.position_id, position_id=o.position_id)

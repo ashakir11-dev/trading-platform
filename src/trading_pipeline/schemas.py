@@ -20,6 +20,8 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
+from .profile import Horizon
+
 
 def new_id() -> str:
     return uuid.uuid4().hex
@@ -144,7 +146,8 @@ class TradePlan(BaseModel):
     entry_condition: str = Field(description="What must be true on the chart to enter, e.g. 'daily close above 42.10'.")
     target_price: float
     stop_loss: float
-    horizon: Literal["swing", "long_term"]
+    horizon: Horizon
+    chart_timeframe: str = Field(description="Chart interval the levels were read from, e.g. '1d'. Must match the horizon's primary chart.")
     invalidation: str
 
 
@@ -201,6 +204,26 @@ class ProcessReviewOutput(BaseModel):
 # --------------------------------------------------------------------------------------
 
 
+class RuleResult(BaseModel):
+    """A deterministic check (no LLM). ``reject`` removes the candidate; ``flag`` warns the user."""
+
+    rule: str
+    outcome: Literal["pass", "reject", "flag"]
+    message: str
+
+
+class Conflict(BaseModel):
+    """The same ticker surfaced by more than one sector call. Always recorded."""
+
+    run_id: str
+    ticker: str
+    kind: Literal["direction_conflict", "duplicate"]
+    first_sector: str
+    first_direction: Direction
+    other_sector: str
+    other_direction: Direction
+
+
 class StageRecord(BaseModel):
     """One agent invocation's structured reasoning log (the feedback loop's backbone)."""
 
@@ -214,6 +237,7 @@ class StageRecord(BaseModel):
     reasoning: StageReasoning
     output: dict[str, Any]
     raw_data_ids: list[str]
+    rules: list[RuleResult] = []
     as_of: datetime
     created_at: datetime = Field(default_factory=utcnow)
 
@@ -250,6 +274,7 @@ class Recommendation(BaseModel):
     company: CompanyDeepDiveOutput
     technical: TechnicalOutput
     live_quote: float | None = None
+    flags: list[RuleResult] = []
 
 
 class Rejection(BaseModel):
@@ -264,6 +289,7 @@ class PipelineReport(BaseModel):
     market: MarketScanOutput
     recommendations: list[Recommendation]
     rejections: list[Rejection]
+    conflicts: list[Conflict] = []
 
 
 class UserDecision(BaseModel):
@@ -294,6 +320,7 @@ class TripwireResult(BaseModel):
     position_id: str
     checked_at: datetime
     tripped: bool
+    alerted: bool = False  # False while a 12h alert cooldown suppresses it; pending reasons alert later
     reasons: list[str]
     last_price: float | None
 
