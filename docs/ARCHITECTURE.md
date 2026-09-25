@@ -166,8 +166,11 @@ recorded and delivered with the next alert, so nothing material is lost.
 
 **Open:**
 
-- **Backtesting and forward (paper) testing.** Being researched: what options, tools,
-  apps and plugins exist (see `testing-research.md` once written). Known constraints:
+- **Backtesting and forward (paper) testing.** Researched in
+  [`testing-research.md`](testing-research.md). Recommendation (not yet decided): build
+  it in-house and treat forward testing as the main evidence. Phase 0 is a forward
+  "shadow ledger" of every recommendation, Phase 1 a replay harness over dates after the
+  model's training cutoff, then analytics libraries and baselines. No broker needed. Known constraints:
   only dates after every model's training cutoff are honest evidence; prices should be
   survivorship-free and fundamentals point-in-time; a simulated decision policy must be
   stored apart from real user decisions; any broker paper-trading integration would
