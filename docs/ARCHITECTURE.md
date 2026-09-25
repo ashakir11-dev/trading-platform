@@ -116,7 +116,8 @@ with no changes to the agents.
 
 **Research:** [`data-sources-research.md`](data-sources-research.md) compares vendors
 across every category and recommends a stack. No stack has been chosen yet. [`live-prices-research.md`](live-prices-research.md)
-compares live-price options in more depth.
+compares live-price options in more depth. [`equibles-evaluation.md`](equibles-evaluation.md)
+evaluates Equibles (self-hosted SEC/FRED/FDA data and cheap Cloud prices).
 
 **Criteria for choosing providers:**
 - **Point-in-time history.** Data must be retrievable as it was known on a past
