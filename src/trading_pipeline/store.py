@@ -18,6 +18,7 @@ from .schemas import (
     Conflict,
     ImprovementNote,
     OutcomeReport,
+    PipelineReport,
     Position,
     ProcessReviewOutput,
     Stage,
@@ -182,3 +183,15 @@ class Store:
                 seen.add(r.id)
                 out.append(r)
         return out
+
+    # -- pipeline reports -------------------------------------------------------------------
+
+    def save_report(self, r: PipelineReport) -> None:
+        self._put("report", r, id=r.run_id, run_id=r.run_id)
+
+    def report(self, run_id: str) -> PipelineReport | None:
+        return self._get("report", run_id, PipelineReport)
+
+    def latest_report(self) -> PipelineReport | None:
+        row = self._db.execute("SELECT json FROM docs WHERE kind='report' ORDER BY rowid DESC LIMIT 1").fetchone()
+        return PipelineReport.model_validate_json(row[0]) if row else None
