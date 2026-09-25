@@ -264,7 +264,7 @@ def test_build_providers_uses_adapters_and_unions_tools(monkeypatch):
     classes = {
         "trading_pipeline.data.equibles_prices": {"EquiblesPrices": {"GetStockPrices"},
                                                   "EquiblesQuotes": {"GetQuote"}},
-        "trading_pipeline.data.equibles_sectors": {"EquiblesSectors": {"Screen"}},
+        "trading_pipeline.data.equibles_sectors": {"EquiblesSectorData": {"Screen"}},
         "trading_pipeline.data.equibles_events": {"EquiblesNews": {"ListFilings"},
                                                   "EquiblesFilings": {"ListFilings", "SearchDocuments"}},
         "trading_pipeline.data.equibles_macro": {"EquiblesMacro": {"GetEconomicIndicator"}},

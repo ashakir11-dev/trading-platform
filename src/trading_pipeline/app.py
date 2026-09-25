@@ -142,7 +142,7 @@ class AdapterSpec:
 ADAPTERS: tuple[AdapterSpec, ...] = (
     AdapterSpec("prices", "trading_pipeline.data.equibles_prices", "EquiblesPrices", UnavailablePrices),
     AdapterSpec("quotes", "trading_pipeline.data.equibles_prices", "EquiblesQuotes", UnavailableQuotes),
-    AdapterSpec("sectors", "trading_pipeline.data.equibles_sectors", "EquiblesSectors", UnavailableSectorData),
+    AdapterSpec("sectors", "trading_pipeline.data.equibles_sectors", "EquiblesSectorData", UnavailableSectorData),
     AdapterSpec("news", "trading_pipeline.data.equibles_events", "EquiblesNews", UnavailableNews),
     AdapterSpec("fundamentals", "trading_pipeline.data.equibles", "EquiblesFundamentals", UnavailableFundamentals,
                 tools=FUNDAMENTALS_TOOLS),
