@@ -119,6 +119,14 @@ across every category and recommends a stack. No stack has been chosen yet. [`li
 compares live-price options in more depth. [`equibles-evaluation.md`](equibles-evaluation.md)
 evaluates Equibles (self-hosted SEC/FRED/FDA data and cheap Cloud prices).
 
+**Chosen so far:**
+- **Fundamentals: self-hosted Equibles** (`data/equibles.py`, `EquiblesFundamentals`).
+  The connector reads Equibles' Postgres tables directly, because its MCP tools are
+  not point-in-time. A fact is visible only if it was filed on an earlier US/Eastern day
+  than `as_of`, and the latest such filing wins, so restatements count only after their
+  filing date. It resolves tickers to companies by listing dates (to handle ticker reuse)
+  and reports an ambiguous or unknown ticker as a data gap.
+
 **Criteria for choosing providers:**
 - **Point-in-time history.** Data must be retrievable as it was known on a past
   date, for honest backtests. This matters most for news/catalysts and
@@ -136,9 +144,9 @@ evaluates Equibles (self-hosted SEC/FRED/FDA data and cheap Cloud prices).
 - A historical news and catalyst archive tied to specific dates. This is the
   hardest to source and the most important for honestly backtesting Agent 1's
   catalyst-based picks.
-- *(Found while scaffolding)* The summary lists neither a source for company
-  fundamentals nor one for **live** news/catalysts. Both are treated as gaps
-  until a source is chosen.
+- *(Found while scaffolding)* The summary listed neither a source for company
+  fundamentals nor one for **live** news/catalysts. Fundamentals are now covered by
+  Equibles (see "Chosen so far"); live news is still a gap.
 
 Gaps are modeled as provider interfaces with `Unavailable*` implementations.
 Their snapshots carry `is_gap=True`, so agents are told the data is missing

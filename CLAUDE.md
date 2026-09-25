@@ -13,3 +13,4 @@ Hard rules:
 - Every data access takes `as_of`; never let a stage see data dated after the run's `as_of`.
 
 Dev: `python -m venv .venv && . .venv/bin/activate && pip install -e '.[dev]' && pytest`
+Set `EQUIBLES_TEST_DSN` (a scratch UTF-8 Postgres database) to also run the Equibles SQL tests.
