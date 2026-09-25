@@ -438,8 +438,13 @@ Interactive: start `claude` in the repository and use `/run --max-sectors 1 --sh
 Headless (cron):
 
 ```sh
-claude -p "/run" --mcp-config .mcp.json --permission-mode acceptEdits
+CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS=0 \
+  claude -p "/run" --mcp-config .mcp.json --permission-mode acceptEdits
 ```
+
+The environment variable keeps a headless run from killing agents that were started
+in the background after 10 minutes; the middleware prompt also launches every agent in
+the foreground.
 
 Everything a run produces is under `workspace/`: `runs/<run_id>/report.md` first,
 then each agent's `analyses/<run_id>/` folder.

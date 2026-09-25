@@ -43,8 +43,12 @@ profile: workspace/runs/<run_id>/profile.json    (only for agents that use it)
 task: <one or two lines: e.g. "Sector call: Energy, upside.">
 ```
 
-Agents within a stage are independent: launch them **in parallel** (several agent
-calls in one message), each with only its own subject in the brief.
+**Always launch agents in the foreground** (`run_in_background: false`) and wait for
+their result before the next step. Never end your turn to wait for a background agent:
+in a headless run that ends the run and the agent is killed.
+
+Agents within a stage are independent: launch them **in parallel** (several foreground
+agent calls in one message), each with only its own subject in the brief.
 
 After each agent returns, check that `output.md` exists in its folder and read its
 frontmatter. If it is missing, move the folder aside (`mv <folder> <folder>.attempt-1`)
