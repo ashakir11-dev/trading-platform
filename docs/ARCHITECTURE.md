@@ -166,6 +166,12 @@ recorded and delivered with the next alert, so nothing material is lost.
 
 **Open:**
 
+- **Prompt-based subagents.** An alternative build where each stage is a prompt-defined
+  subagent that fetches its own data through the Equibles MCP tools. Proposal and the
+  decisions it needs (backtests, hard-rule wording, rules/outcomes in code or prompts):
+  [`prompt-subagents-design.md`](prompt-subagents-design.md). The Python pipeline
+  stays as is until decided.
+
 - **Backtesting and forward (paper) testing.** Researched in
   [`testing-research.md`](testing-research.md). Recommendation (not yet decided): build
   it in-house and treat forward testing as the main evidence. Phase 0 is a forward
