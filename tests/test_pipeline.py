@@ -184,7 +184,7 @@ def test_improvement_note_defaults_unapproved():
 # ------------------------------------------------------------------------------------
 
 from trading_pipeline.profile import InvestorProfile  # noqa: E402
-from trading_pipeline.schemas import SectorCall, TradePlan  # noqa: E402
+from trading_pipeline.schemas import SectorCall  # noqa: E402
 
 from .fakes import FixtureNews, FixtureQuotes, plan, reasoning  # noqa: E402
 
@@ -247,3 +247,13 @@ async def test_conflicts_always_recorded_and_short_blocked_by_profile():
     # The downside (short) entries are rejected by the long-only default profile.
     assert any(x.stage == Stage.SECTOR_DEEP_DIVE and "profile_short" in x.summary for x in report.rejections)
     assert "Conflicts (" in render_report(report)
+
+
+async def test_second_decision_for_same_candidate_is_blocked():
+    mw, _, store = build()
+    report = await mw.run(AS_OF)
+    cid = report.recommendations[0].candidate.id
+    mw.record_decision(cid, accepted=True)
+    with pytest.raises(ValueError, match="already recorded"):
+        mw.record_decision(cid, accepted=False)
+    assert len(store.user_decisions()) == 1 and len(store.open_positions()) == 1

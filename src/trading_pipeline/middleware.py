@@ -299,6 +299,8 @@ class Middleware:
         cand = self._store.candidate(candidate_id)
         if cand is None or cand.status != "recommended":
             raise ValueError(f"{candidate_id} is not a recommended candidate")
+        if self._store.user_decision_for(candidate_id) is not None:
+            raise ValueError(f"a decision was already recorded for {candidate_id}")
         self._store.save_user_decision(UserDecision(candidate_id=candidate_id, accepted=accepted, note=note))
         if not accepted:
             return None
@@ -334,7 +336,7 @@ class Middleware:
             raise KeyError(position_id)
         end = position.closed_at or now
         bars = await self._data.prices.bars(position.ticker, position.opened_at.date(), end)
-        outcome = compute_outcome(position, bars, now)
+        outcome = compute_outcome(position, bars, now, self.config.profile.level_trigger)
         self._store.save_outcome(outcome)
 
         trail = self._store.review_trail(position)

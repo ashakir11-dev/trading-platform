@@ -16,7 +16,7 @@ from collections.abc import Iterable
 from datetime import date, datetime
 from typing import Any
 
-from .data.base import DataSnapshot
+from .data.base import DataSnapshot, PriceBar
 from .profile import HORIZONS, InvestorProfile
 from .schemas import RuleResult, TradePlan
 
@@ -66,6 +66,23 @@ def check_plan(plan: TradePlan, profile: InvestorProfile) -> list[RuleResult]:
         out.append(_r("reward_to_risk", "reject",
                       f"reward:risk is {rr:.2f}; profile requires at least {profile.min_reward_to_risk}"))
     return out
+
+
+# --------------------------------------------------------------------------------------
+# Stop / target hits (shared by Agent 5 alerts and the outcomes agent)
+# --------------------------------------------------------------------------------------
+
+
+def levels_hit(plan: TradePlan, bar: PriceBar, trigger: str) -> tuple[bool, bool]:
+    """(stop_hit, target_hit) for one bar, per the profile's ``level_trigger``."""
+    long = plan.direction == "long"
+    if trigger == "intraday":
+        adverse, favorable = (bar.low, bar.high) if long else (bar.high, bar.low)
+    else:
+        adverse = favorable = bar.close
+    stop = adverse <= plan.stop_loss if long else adverse >= plan.stop_loss
+    target = favorable >= plan.target_price if long else favorable <= plan.target_price
+    return stop, target
 
 
 # --------------------------------------------------------------------------------------

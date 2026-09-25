@@ -6,8 +6,7 @@ schema, or the middleware. The original design summary is kept in
 and adds the implementation decisions made during scaffolding (see
 [Implementation decisions](#implementation-decisions)).
 
-The design started as an extension of the dual-MCP stock agent (Massive.com + Robinhood),
-but **those providers are not locked in** (see §6). It is a
+All market data comes from **Equibles** (see §6). It is a
 **research and decision-support system**. It never places orders. A human makes
 every go/no-go call.
 
@@ -92,7 +91,8 @@ Step-by-step runtime flow (sequence diagrams): [`sequence-diagrams.md`](sequence
 **Investor profile** (`profile.py`, `PipelineConfig.profile`, example in
 `profile.example.json`): who the pipeline works for, including risk tolerance, allowed
 holding horizons, whether shorts are allowed, maximum loss per trade, minimum
-reward:risk, target return, and free-text notes. It is the user's *preferences*, set up
+reward:risk, target return, how stop/target hits are detected (`level_trigger`), and
+free-text notes. It is the user's *preferences*, set up
 front, not a decision, so showing it to agents does not break the one-way middleware
 principle. The technical agent and Agent 5's full review read it, and the rules
 enforce it.
@@ -131,8 +131,13 @@ more than one sector call, it is **always recorded**, as `direction_conflict` (o
 directions) or `duplicate`. The first surfacing advances; the record is stored and shown
 in the report.
 
-**Alerts** (Agent 5). A tripwire fires on price crossing the stop or target (on the
-daily close), or on **material** news. `rules.is_material` keeps SEC 8-Ks with material
+**Stop and target hits** follow the profile's `level_trigger`: `close` (default) counts
+a hit only when a bar *closes* beyond the level; `intraday` counts it as soon as the bar's
+low/high touches it. Agent 5's alerts and the outcomes agent share one function
+(`rules.levels_hit`), so they always agree.
+
+**Alerts** (Agent 5). A tripwire fires on price hitting the stop or target (per
+`level_trigger`), or on **material** news. `rules.is_material` keeps SEC 8-Ks with material
 items (e.g. 1.01, 2.02, 5.02), earnings, guidance, FDA, M&A, rating changes, offerings,
 legal and leadership news, and drops price-action chatter, reiterations and listicles.
 Each alert triggers a full re-review. After an alert, further alerts for the same
@@ -150,20 +155,35 @@ recorded and delivered with the next alert, so nothing material is lost.
 | Agent 1 data | **Bulk screen at Agent 1, deep data later.** Agent 1 screens every company in the sector from cheap bulk data; full per-company fundamentals are fetched only for the shortlist. | Full fundamentals for a whole sector cost ~28 Equibles calls per company. |
 | Raw-data pass-through scope | **Relevant subset**: market + sector + the company's own data. | Keeps the principle (no stage blinded by an upstream filter) at a fraction of the token cost of repeating every company's data in ~30 prompts. |
 
+**Decided (2026-09-25, second round):**
+
+| Decision | Choice |
+|---|---|
+| Data vendor | **Equibles for all data.** Anything Equibles doesn't provide is deferred, not sourced elsewhere. |
+| Stop/target definition | **Customizable in the investor profile** (`level_trigger`: `close` or `intraday`), shared by alerts and outcomes. |
+| Duplicate decisions | **Blocked.** A second accept/reject for the same candidate raises an error. |
+| Cost | Not a concern for now; no budgets or caching work yet. |
+
 **Open:**
 
-- **Backtesting and forward (paper) testing.** Deferred. Known constraints for when we
-  pick it up: only dates after every model's training cutoff are honest evidence;
-  prices must be survivorship-free and fundamentals point-in-time; a simulated decision
-  policy must be stored apart from real user decisions; any broker paper-trading
-  integration would relax the no-orders rule and needs an explicit decision.
-- **Day trading** as a horizon: needs a decision to change principle 7.
-- **Stop definition:** Agent 5 alerts on the daily *close* crossing the stop, while the
-  outcomes agent counts a stop as hit on the intraday *low*. These should be unified.
-- **Proposed rules:** liquidity floor, sector concentration across recommendations.
-- **Proposed, not decided:** keep our own daily snapshots of scheduled-event calendars
-  (earnings, FDA), since no affordable source records past expected dates; and add new
-  8-K filings (e.g. items 2.02, 5.02, 1.01) as an Agent 5 tripwire.
+- **Backtesting and forward (paper) testing.** Being researched: what options, tools,
+  apps and plugins exist (see `testing-research.md` once written). Known constraints:
+  only dates after every model's training cutoff are honest evidence; prices should be
+  survivorship-free and fundamentals point-in-time; a simulated decision policy must be
+  stored apart from real user decisions; any broker paper-trading integration would
+  relax the no-orders rule and needs an explicit decision.
+
+**Future enhancements (not planned now):**
+
+- **Day trading** as a horizon (would need principle 7 changed).
+- **More rules:** liquidity floor, sector concentration across recommendations.
+- **Own snapshots of scheduled-event calendars** (earnings, FDA). Not needed if Equibles
+  keeps the dates *as they were expected at the time*; worth revisiting if backtests
+  show it doesn't.
+- **Cost controls:** token/cost tracking, per-run budgets, prompt caching, condensing
+  long price histories in prompts.
+- **Real-model evaluation:** test prompt quality against the real model with an
+  evaluation set, once the system is complete.
 
 ## 6. Data requirements
 
@@ -172,63 +192,45 @@ historical, point-in-time** version (to backtest it honestly):
 
 - Price and volume
 - Sector-level performance and breadth
-- News and catalyst events (earnings, FDA approvals, analyst actions)
+- News and catalyst events (earnings, FDA, analyst actions)
 - Company fundamentals (financials, filings, ownership, valuation)
+- Macro data (rates, inflation, FX), for the foreseeable-risk checks
 
-**Providers are not decided.** Massive.com and Robinhood are what the original
-stock agent used, and they are the current *candidates*, not requirements. We are free
-to choose better sources per category. Because each category sits behind its own
-provider interface (`data/base.py`), switching providers means writing one adapter,
-with no changes to the agents.
+**Vendor: Equibles** (hosted MCP at `https://mcp.equibles.com/mcp`, plus REST). Anything
+it doesn't provide is **deferred**. Agents still depend only on the provider interfaces
+in `data/base.py`, so this stays swappable.
 
-**Candidate coverage today (from the original stock agent):**
-- Massive.com MCP: historical OHLCV, technical indicators, pivot
-  support/resistance. Would feed the Technical Analysis agent.
-- Robinhood MCP: live quotes, account data, positions. Would feed the middleware's
-  visibility layer. **Read-only use only.**
+| Need | Equibles source | Adapter | Notes |
+|---|---|---|---|
+| Company fundamentals | `GetFinancialFact` (SEC XBRL with filing dates) | **Built** (`EquiblesFundamentals`) | Point-in-time; see below |
+| Daily price history | `GetStockPrices` | To build | Weekly bars derived from daily. History comes from Yahoo (self-hosted docs); delisted coverage unconfirmed |
+| Intraday (1h) bars, live quotes | Paid plans (Plus: 15-min delayed, Pro: real-time) | To build | Needed for `short_term` and the stale-entry check |
+| Indicators, support/resistance | Equibles has Bollinger, Stochastic, ATR, OBV | To build | Other indicators and pivots computed locally from Equibles prices |
+| Sector screen | Cloud screener | To build | Tool reference needed |
+| Sector breadth | Derived from Equibles prices + industry classification | To build | |
+| SEC filings / 8-Ks | `ListFilings`, `SearchDocuments` | To build | Main catalyst and alert source; 8-K items feed the news filter |
+| FDA | `GetFdaAdvisoryCommitteeMeetings` | To build | Advisory meetings only; PDUFA dates **deferred** |
+| Macro | FRED tools (`GetEconomicIndicator`, ...) | To build | Latest revised values only; point-in-time vintages **deferred** |
+| Earnings calendar | Unconfirmed | To confirm | Deferred if not provided |
+| Earnings transcripts, guidance | Cloud plans | Later | Useful for the company deep dive |
+| General news headlines | Not provided | **Deferred** | Filings stand in for news |
+| Analyst ratings | Not provided | **Deferred** | |
 
-**Research:** [`data-sources-research.md`](data-sources-research.md) compares vendors
-across every category and recommends a stack. No stack has been chosen yet. [`live-prices-research.md`](live-prices-research.md)
-compares live-price options in more depth. [`equibles-evaluation.md`](equibles-evaluation.md)
-evaluates Equibles (self-hosted SEC/FRED/FDA data and cheap Cloud prices).
+**Fundamentals connector:** for each concept it asks `GetFinancialFact` for both the
+originally reported and the latest restated values, each carrying its filing date, and
+keeps only rows filed on an earlier US/Eastern day than `as_of`. For each period the latest
+such filing wins, so a restatement counts only after it was filed. (Only a middle
+restatement of a period restated twice can be missed.) Caveats:
+- Equibles adjusts per-share values to today's share basis. In backtests that reveals
+  future splits, so those values are dropped and noted.
+- The hosted tool resolves tickers to today's company, so a reused ticker can point at the
+  wrong company in old backtests. The payload names the company so this is visible.
+- 2 calls per concept (28 per ticker by default), so real runs need the Plus plan.
+`EquiblesPostgresFundamentals` is the exact, self-hosted alternative.
 
-**Chosen so far:**
-- **Fundamentals: Equibles, hosted MCP** (`data/equibles.py`, `EquiblesFundamentals`),
-  at `https://mcp.equibles.com/mcp` with an API key. No database to run. For each concept
-  it asks `GetFinancialFact` for both the originally reported and the latest restated
-  values, each carrying its filing date, and keeps only rows filed on an earlier
-  US/Eastern day than `as_of`. For each period the latest such filing wins, so a
-  restatement counts only after it was filed. (Only a middle restatement of a period
-  restated twice can be missed.) Two caveats:
-  - Equibles adjusts per-share values to today's share basis. In backtests that
-    reveals future splits, so those values are dropped and noted.
-  - The hosted tool resolves tickers to today's company, so a reused ticker can point
-    at the wrong company in old backtests. The payload names the company so this is
-    visible.
-  Budget: 2 calls per concept (28 per ticker by default), so real runs need the Plus
-  plan (10,000 calls/day). `EquiblesPostgresFundamentals` is the exact, self-hosted
-  alternative (reads Equibles' Postgres, resolves tickers by listing dates).
-
-**Criteria for choosing providers:**
-- **Point-in-time history.** Data must be retrievable as it was known on a past
-  date, for honest backtests. This matters most for news/catalysts and
-  fundamentals (restatements).
-- **Survivorship-free universes.** Include delisted tickers, or sector
-  screens will backtest too well.
-- Coverage of every category above, ideally with fewer vendors.
-- Programmatic access (API or MCP), reasonable rate limits, cost, and license
-  terms that allow storing data locally.
-- A brokerage is **not** required. The system never trades, so account data is
-  only a convenience for the visibility layer.
-
-**Open gaps:**
-- Live and historical sector-level screening and breadth data.
-- A historical news and catalyst archive tied to specific dates. This is the
-  hardest to source and the most important for honestly backtesting Agent 1's
-  catalyst-based picks.
-- *(Found while scaffolding)* The summary listed neither a source for company
-  fundamentals nor one for **live** news/catalysts. Fundamentals are now covered by
-  Equibles (see "Chosen so far"); live news is still a gap.
+Background research that led here: [`data-sources-research.md`](data-sources-research.md),
+[`live-prices-research.md`](live-prices-research.md),
+[`equibles-evaluation.md`](equibles-evaluation.md).
 
 Gaps are modeled as provider interfaces with `Unavailable*` implementations.
 Their snapshots carry `is_gap=True`, so agents are told the data is missing
@@ -262,12 +264,35 @@ Choices made while scaffolding. Each one is easy to revisit.
 | Investor profile & rules | `InvestorProfile` in config; `rules.py` holds all deterministic checks as pure functions; results are logged per stage record and shown as flags in the report. | `profile.py`, `rules.py`, `middleware.py` |
 | Alerts | Material-news filter plus 12h per-position cooldown with held reasons delivered later. | `rules.py`, `agents/follow_up.py` |
 | Point-in-time data | Every provider call takes `as_of`. `RawDataBundle.add` rejects a snapshot dated after the run's `as_of`, which guards against look-ahead in backtests. | `data/base.py` |
-| Data access | The middleware fetches data through provider interfaces, not the agents. Vendors are not decided (§6). `data/mcp.py` holds skeleton adapters for the original candidates (Massive, Robinhood) behind a small `McpToolCaller` protocol; the tool-name mapping is TODO. Any other vendor is a new adapter that implements the same protocols. Any quotes/account adapter must have **no order methods**. | `data/base.py`, `data/mcp.py` |
-| User decisions | Stored in a separate table. `Store.review_trail()` (what the process agent reads) never includes them. | `store.py` |
+| Data access | The middleware fetches data through provider interfaces, not the agents. All adapters are Equibles (§6). MCP calls go through `HttpMcpClient`, which only calls allowlisted tools. Any quotes/account adapter must have **no order methods**. | `data/base.py`, `data/mcp.py`, `data/equibles.py` |
+| User decisions | Stored in a separate table. `Store.review_trail()` (what the process agent reads) never includes them. One decision per candidate; a second is rejected. | `store.py`, `middleware.py` |
 | Outcomes agent | Plain deterministic code, no LLM, so "no judgment" holds by construction. | `agents/outcomes.py` |
 | Process → Agent 0 improvement | Improvement signals are stored as `ImprovementNote`s with `approved=False`. Only human-approved notes are injected into stage prompts. This guards against the loop overfitting to recent outcomes. | `agents/process_review.py`, `agents/base.py` |
-| Follow-up scheduling | Agent 5 exposes `tick(now)`. It runs the cheap tripwire check every tick and the full re-review when `full_review_interval` has passed. An external scheduler (cron, etc.) calls it. | `agents/follow_up.py` |
+| Follow-up scheduling | Agent 5 exposes `tick(now)`. Every tick runs the cheap tripwire check; a full re-review runs when an alert is raised (subject to the 12h cooldown) or `full_review_interval` has passed. An external scheduler (cron, etc.) calls it. | `agents/follow_up.py` |
 
-**Not built yet:** data-provider selection and real adapters, the backtest
-harness (replay over a date range with holdout enforcement), and a CLI or UI for
-the middleware report.
+## Remaining work
+
+**Blocking a first real run (all Equibles adapters, §6):**
+1. Prices: daily history, intraday bars, live quotes, plus locally computed indicators
+   and support/resistance levels.
+2. Sector screen and derived sector breadth (Agent 1's input).
+3. Filings/8-Ks as the catalyst and alert source; FDA advisory meetings; earnings
+   calendar if Equibles has one.
+4. A way to run and operate the system: CLI for runs, decisions, closing positions,
+   reviews and approving improvement notes, plus a scheduled Agent 5 tick.
+
+**Design gaps to close:**
+5. Macro data: no agent receives any yet, although agents are told to weigh macro
+   exposure and the process agent penalizes missing it. Add a macro interface fed by
+   Equibles' FRED tools.
+6. Filings interface for the company deep dive (the design lists filings as its input).
+7. Agent 1 input: add FDA/earnings events for the sector (design lists them).
+8. `holdout_start` is defined but unused (belongs to the testing harness).
+9. The look-ahead guard checks snapshot dates, not payload contents: every real adapter
+   needs tests proving it filters by `as_of`.
+10. Agent 5 could prompt the user to close and review a position when a stop or target
+    is hit (today closing and reviewing are manual).
+
+**Research in progress:** backtesting and forward-testing options (§5).
+
+**Future enhancements:** see §5.

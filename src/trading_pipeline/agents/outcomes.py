@@ -5,10 +5,13 @@ from __future__ import annotations
 from datetime import datetime
 
 from ..data.base import PriceBar
+from ..rules import levels_hit
 from ..schemas import OutcomeReport, Position
 
 
-def compute_outcome(position: Position, bars: list[PriceBar], now: datetime) -> OutcomeReport:
+def compute_outcome(position: Position, bars: list[PriceBar], now: datetime,
+                    trigger: str = "close") -> OutcomeReport:
+    """``trigger`` is the investor profile's ``level_trigger``, so outcomes agree with alerts."""
     plan = position.plan
     entry = plan.entry_price
     held = [b for b in bars if b.ts >= position.opened_at]
@@ -39,8 +42,8 @@ def compute_outcome(position: Position, bars: list[PriceBar], now: datetime) -> 
         return_pct=pct(last),
         max_adverse_excursion_pct=min(0.0, pct(worst)),
         max_favorable_excursion_pct=max(0.0, pct(best)),
-        hit_stop=(min(lows) <= plan.stop_loss) if long else (max(highs) >= plan.stop_loss),
-        hit_target=(max(highs) >= plan.target_price) if long else (min(lows) <= plan.target_price),
+        hit_stop=any(levels_hit(plan, b, trigger)[0] for b in held),
+        hit_target=any(levels_hit(plan, b, trigger)[1] for b in held),
         holding_days=(end - position.opened_at).days,
         closed=position.status == "closed",
     )

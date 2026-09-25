@@ -119,6 +119,10 @@ class Store:
                          (d.id, d.candidate_id, d.model_dump_json()))
         self._db.commit()
 
+    def user_decision_for(self, candidate_id: str) -> UserDecision | None:
+        row = self._db.execute("SELECT json FROM user_decisions WHERE candidate_id=?", (candidate_id,)).fetchone()
+        return UserDecision.model_validate_json(row[0]) if row else None
+
     def user_decisions(self) -> list[UserDecision]:
         return [UserDecision.model_validate_json(r[0])
                 for r in self._db.execute("SELECT json FROM user_decisions ORDER BY rowid")]

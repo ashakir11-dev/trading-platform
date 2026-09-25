@@ -135,3 +135,43 @@ async def test_noise_news_does_not_alert():
     news.events_by_subject["AAA"] = [{"ts": bars[1].ts, "headline": "Why Acme stock is up today"}]
     event = (await mw.follow_up_loop().tick(bars[2].ts))[0]
     assert not event.tripwire.tripped and event.review is None
+
+
+# ------------------------------------------------------------------------------------
+# Stop/target trigger (profile.level_trigger) shared by alerts and outcomes
+# ------------------------------------------------------------------------------------
+
+from trading_pipeline.data.base import PriceBar  # noqa: E402
+
+
+def dip_bar(ts):
+    # Trades through the 90 stop intraday (low 89) but closes back above it.
+    return PriceBar(ts=ts, open=95, high=96, low=89, close=94)
+
+
+def test_trigger_close_vs_intraday_tripwire():
+    p = position()
+    bars = [dip_bar(OPEN)]
+    assert not check_tripwires(p, bars, None, OPEN, "close").tripped
+    t = check_tripwires(p, bars, None, OPEN, "intraday")
+    assert t.tripped and "stop" in t.reasons[0]
+
+
+def test_trigger_close_vs_intraday_outcome():
+    bars = [dip_bar(OPEN)]
+    assert not compute_outcome(position(), bars, now=OPEN, trigger="close").hit_stop
+    assert compute_outcome(position(), bars, now=OPEN, trigger="intraday").hit_stop
+
+
+async def test_profile_trigger_flows_to_follow_up():
+    from trading_pipeline.profile import InvestorProfile
+
+    bars = make_bars([100, 100], OPEN)
+    bars.append(dip_bar(OPEN + timedelta(days=2)))
+    llm, store = ScriptedLLM(), Store()
+    cfg = PipelineConfig(profile=InvestorProfile(level_trigger="intraday"))
+    mw = Middleware(cfg, llm, providers(prices=FixturePrices({"AAA": bars})), store)
+    report = await mw.run(AS_OF)
+    mw.record_decision(report.recommendations[0].candidate.id, True, opened_at=OPEN)
+    event = (await mw.follow_up_loop().tick(bars[-1].ts))[0]
+    assert event.tripwire.alerted and "traded through stop" in event.tripwire.reasons[0]

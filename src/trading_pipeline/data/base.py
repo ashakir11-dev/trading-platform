@@ -104,7 +104,7 @@ class PriceBar(BaseModel):
 
 
 class PriceDataProvider(Protocol):
-    """Historical OHLCV, indicators, pivots. (Candidate: Massive.com MCP.)
+    """Historical OHLCV, indicators, pivots. (Source: Equibles.)
 
     ``ohlcv``/``indicators``/``pivots`` return raw snapshots for agent prompts;
     ``bars`` returns typed bars for deterministic code (tripwires, outcomes, rules).
@@ -120,7 +120,7 @@ class PriceDataProvider(Protocol):
 
 
 class QuoteProvider(Protocol):
-    """Live quotes and, optionally, account positions. (Candidate: Robinhood MCP.) READ-ONLY."""
+    """Live quotes and, optionally, account positions. (Source: Equibles.) READ-ONLY."""
 
     async def quote(self, ticker: str) -> DataSnapshot: ...
     async def positions(self) -> DataSnapshot: ...

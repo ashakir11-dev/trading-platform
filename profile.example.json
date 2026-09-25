@@ -1,10 +1,14 @@
 {
   "name": "example",
   "risk_tolerance": "moderate",
-  "horizons": ["swing", "long_term"],
+  "horizons": [
+    "swing",
+    "long_term"
+  ],
   "allow_short": false,
   "max_loss_per_trade_pct": 8.0,
   "min_reward_to_risk": 2.0,
+  "level_trigger": "close",
   "target_return_pct": 15.0,
   "notes": "Avoid tobacco and weapons. Prefer companies with positive free cash flow."
 }

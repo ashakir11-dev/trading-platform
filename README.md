@@ -69,7 +69,8 @@ The essentials:
 
 The pipeline works for a specific investor. The profile sets risk tolerance, allowed
 horizons, whether shorts are allowed, maximum loss per trade, minimum reward:risk, target
-return and free-text preferences. The technical agent plans around it and the rules
+return, whether a stop/target counts as hit on the close or intraday (`level_trigger`),
+and free-text preferences. The technical agent plans around it and the rules
 enforce it.
 
 ```json
@@ -81,6 +82,7 @@ enforce it.
   "max_loss_per_trade_pct": 8.0,
   "min_reward_to_risk": 2.0,
   "target_return_pct": 15.0,
+  "level_trigger": "close",
   "notes": "Avoid tobacco and weapons. Prefer companies with positive free cash flow."
 }
 ```
@@ -124,8 +126,9 @@ pip install -e '.[equibles-postgres]'  # self-hosted Equibles database
 
 ### Wiring a run
 
-There is no CLI yet. A run is wired in Python. The data providers below are the ones
-that exist today; the price provider still needs a real adapter before a live run works.
+There is no CLI yet. A run is wired in Python. Only the fundamentals provider exists
+today; the price and quote providers (Equibles) still need to be built before a live run
+works.
 
 ```python
 import asyncio
@@ -159,20 +162,20 @@ LLM and fixture data, which is the best reference for how the pieces fit.
 
 ## Data sources
 
-Agents depend only on the provider interfaces in `src/trading_pipeline/data/base.py`,
-never on a vendor. Research and decisions:
+All data comes from **[Equibles](https://equibles.com)** (hosted MCP + REST). Anything it
+doesn't provide is deferred. Agents depend only on the provider interfaces in
+`src/trading_pipeline/data/base.py`, never on the vendor.
 
 | Category | Current state |
 |---|---|
-| Company fundamentals | **Equibles** (hosted MCP), point-in-time by filing date |
-| Price history, indicators, pivots | Adapter skeleton only (Massive); Sharadar or Norgate recommended for backtests |
-| Live quotes | Adapter skeleton only; Alpaca free tier recommended |
-| Sector screen and breadth | Gap: to be derived from prices |
-| News, catalysts, earnings calendar | Gap |
+| Company fundamentals | **Built**: Equibles, point-in-time by filing date |
+| Prices, intraday bars, live quotes, indicators | To build on Equibles |
+| Sector screen and breadth | To build (screener + breadth derived from prices) |
+| SEC filings / 8-Ks, FDA advisory meetings, macro (FRED) | To build on Equibles |
+| Earnings calendar | To confirm with Equibles |
+| General news headlines, analyst ratings, PDUFA dates | Deferred (not in Equibles) |
 
-See [`docs/data-sources-research.md`](docs/data-sources-research.md),
-[`docs/live-prices-research.md`](docs/live-prices-research.md) and
-[`docs/equibles-evaluation.md`](docs/equibles-evaluation.md).
+The full mapping is in [`docs/ARCHITECTURE.md` §6](docs/ARCHITECTURE.md#6-data-requirements).
 
 ## Project layout
 
@@ -212,14 +215,10 @@ investor profile, rules module, conflict recording, follow-up alerts with a news
 cooldown, outcomes and process review with human-approved improvements, Equibles
 fundamentals.
 
-**Next:**
-- Real adapters for prices, live quotes, news/filings and an earnings calendar.
-- A CLI or UI for the report and your decisions.
-- Backtesting and forward (paper) testing. Only results after the model's training
-  cutoff count as honest evidence, so forward testing will be the main measure.
-
-Open design questions are tracked in
-[`docs/ARCHITECTURE.md` §5](docs/ARCHITECTURE.md#5-design-decisions).
+**Next:** Equibles adapters for prices, quotes, sector screen, filings, FDA and macro
+data; a CLI for runs and decisions; then backtesting and forward testing (being
+researched). The full list is in
+[`docs/ARCHITECTURE.md` → Remaining work](docs/ARCHITECTURE.md#remaining-work).
 
 ## Disclaimer
 

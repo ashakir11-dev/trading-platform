@@ -20,23 +20,24 @@ from pydantic import BaseModel
 from ..config import PipelineConfig
 from ..data.base import DataProviders, DataSnapshot, PriceBar, RawDataBundle
 from ..profile import HORIZONS, InvestorProfile
-from ..rules import is_material
+from ..rules import is_material, levels_hit
 from ..schemas import FullReviewOutput, Position, Stage, StageRecord, TripwireResult
 from ..store import Store
 from .base import StageAgent
 
 
 def check_tripwires(position: Position, bars: list[PriceBar], news: DataSnapshot | None,
-                    now: datetime) -> TripwireResult:
+                    now: datetime, trigger: str = "close") -> TripwireResult:
     plan = position.plan
     reasons: list[str] = []
     last = bars[-1].close if bars else None
-    if last is not None:
-        long = plan.direction == "long"
-        if (last <= plan.stop_loss) if long else (last >= plan.stop_loss):
-            reasons.append(f"price {last} crossed stop {plan.stop_loss}")
-        if (last >= plan.target_price) if long else (last <= plan.target_price):
-            reasons.append(f"price {last} reached target {plan.target_price}")
+    if bars:
+        stop_hit, target_hit = levels_hit(plan, bars[-1], trigger)
+        basis = "closed" if trigger == "close" else "traded"
+        if stop_hit:
+            reasons.append(f"price {basis} through stop {plan.stop_loss} (last close {last})")
+        if target_hit:
+            reasons.append(f"price {basis} at/through target {plan.target_price} (last close {last})")
     # Only material news trips the wire; routine headlines and price chatter are noise.
     if news is not None and not news.is_gap and isinstance(news.payload, list):
         for e in news.payload:
@@ -97,7 +98,7 @@ class FollowUpLoop:
         bars = await self._data.prices.bars(position.ticker, position.opened_at.date(), now)
         news = await self._data.news.events(position.ticker, since, now)
 
-        tripwire = check_tripwires(position, bars, news, now)
+        tripwire = check_tripwires(position, bars, news, now, self._config.profile.level_trigger)
         self._apply_cooldown(position, tripwire, now)
         self._store.save_tripwire(tripwire)
         event = FollowUpEvent(position_id=position.id, ticker=position.ticker, tripwire=tripwire)

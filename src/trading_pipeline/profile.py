@@ -72,6 +72,9 @@ class InvestorProfile(BaseModel):
     max_loss_per_trade_pct: float = Field(10.0, description="Max stop distance from entry, in percent.")
     min_reward_to_risk: float = Field(2.0, description="Minimum (target - entry) / (entry - stop).")
     target_return_pct: float | None = Field(None, description="Typical return the investor aims for per trade.")
+    level_trigger: Literal["close", "intraday"] = Field(
+        "close", description="When a stop or target counts as hit: on a closing price beyond it ('close'), "
+                             "or as soon as the bar's low/high touches it ('intraday'). Used by alerts and outcomes.")
     notes: str = Field("", description="Free-text preferences, e.g. sectors to avoid.")
 
     def charts(self) -> list[ChartSpec]:
