@@ -57,7 +57,7 @@ confidence: 0.6
 ## Data gaps
 ```
 
-`<analysis_folder>/analysis.md`: common frontmatter (see `prompts/formats.md`), plus:
+`<analysis_folder>/output.md`: common frontmatter (see `prompts/formats.md`), plus:
 
 ```yaml
 sector: Energy
@@ -81,5 +81,5 @@ Body:
 ## Data gaps
 ```
 
-`confidence` in `analysis.md` is your confidence in the sector view; each company file
+`confidence` in `output.md` is your confidence in the sector view; each company file
 has its own.

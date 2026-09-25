@@ -64,7 +64,7 @@ def test_subagents_cannot_reach_decisions(project, tool, args):
     ("Glob", {"pattern": f"{FOLDER}/raw/*.json"}),
     ("Glob", {"pattern": "*.json", "path": f"{FOLDER}/raw"}),
     ("Grep", {"pattern": "XLE", "path": "workspace/agents"}),
-    ("Write", {"file_path": f"{FOLDER}/analysis.md", "content": "Rate decisions by the Fed matter."}),
+    ("Write", {"file_path": f"{FOLDER}/output.md", "content": "Rate decisions by the Fed matter."}),
 ])
 def test_normal_agent_work_is_allowed(project, tool, args):
     assert guard.pre(event(project, tool, args)) is None

@@ -50,7 +50,7 @@ thesis and its own structured reasoning.
 
 ## Output
 
-Write `<analysis_folder>/analysis.md`. Common frontmatter (see `prompts/formats.md`),
+Write `<analysis_folder>/output.md`. Common frontmatter (see `prompts/formats.md`),
 plus:
 
 ```yaml

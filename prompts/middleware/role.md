@@ -46,9 +46,11 @@ task: <one or two lines: e.g. "Sector call: Energy, upside.">
 Agents within a stage are independent: launch them **in parallel** (several agent
 calls in one message), each with only its own subject in the brief.
 
-After each agent returns, check that `analysis.md` exists in its folder and read its
-frontmatter. If it is missing, relaunch that agent once with the same brief; if it
-fails again, record it under "Errors" in `run.md` and carry on with the others.
+After each agent returns, check that `output.md` exists in its folder and read its
+frontmatter. If it is missing, move the folder aside (`mv <folder> <folder>.attempt-1`)
+so the retry's `raw/` holds only what the retry saw, then relaunch the agent once with
+the same brief. If it fails again, record it under "Errors" in `run.md` (with what the
+agent reported) and carry on with the others. Never write an agent's output yourself.
 
 ## Forwarding rules
 

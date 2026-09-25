@@ -13,7 +13,7 @@ workspace/
   agents/<agent>/analyses/<run_id>/<subject>/
     claim.md                                written first by the agent
     raw/NNN-<Tool>.json                     every Equibles response, saved by a hook
-    analysis.md                             the agent's analysis
+    output.md                               the agent's analysis
     companies/<TICKER>.md                   sector-deep-dive only: one file per company
   positions/<position_id>/position.md       accepted trades being watched
   decisions/<candidate_id>.md               the user's decisions: middleware agent only
@@ -42,9 +42,9 @@ started_at: 2026-09-25T21:35:02Z
 ---
 ```
 
-## analysis.md (common frontmatter)
+## output.md (common frontmatter)
 
-Every agent's `analysis.md` starts with these fields, then the agent-specific fields
+Every agent's `output.md` starts with these fields, then the agent-specific fields
 its role lists:
 
 ```yaml

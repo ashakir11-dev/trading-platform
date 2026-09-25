@@ -3,7 +3,7 @@
 Your brief names one sector call from the market scanner: the sector, its direction,
 and the market scanner's folder as `upstream`.
 
-1. Read the upstream `analysis.md`: the market summary and **your sector's section**.
+1. Read the upstream `output.md`: the market summary and **your sector's section**.
    Skip other sectors' sections.
 2. Read the upstream `raw/` files for the benchmark, your sector ETF and the macro
    series. Do not fetch those again.

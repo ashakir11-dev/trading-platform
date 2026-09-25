@@ -128,7 +128,7 @@ workspace/
   runs/<run_id>/packs/<stage>/<subject>/  backtests only: gatekeeper data pack + audit (§10)
   agents/<agent>/
     analyses/<run_id>/<subject>/          subject = "market", a sector or a ticker
-      analysis.md                         the agent's output (format below)
+      output.md                         the agent's output (format below)
       raw/<tool>-<n>.json                 every tool result it used, verbatim
     evaluations/<eval_id>.md              evaluation-mode output
     feedback/<proposal_id>.md             feedback proposals, status: pending|approved|rejected
@@ -352,7 +352,7 @@ sequenceDiagram
         MW->>GK: rebuild pack (audit attached), then re-audit
     end
     MW->>ST: pack path + upstream analyses
-    ST-->>MW: analysis.md (+ requests.md if it needs more data)
+    ST-->>MW: output.md (+ requests.md if it needs more data)
     opt requests.md present (at most 2 rounds)
         MW->>GK: extend pack with the requests
         MW->>AU: re-audit
