@@ -281,3 +281,15 @@ async def test_second_review_of_same_position_is_blocked():
     with pytest.raises(ValueError, match="already reviewed"):
         await mw.review_position(pos.id, now=bars[-1].ts)
     assert len(store.improvements(approved_only=False)) == 1
+
+
+async def test_max_sectors_pursues_highest_confidence_only():
+    mw, llm, _ = build(PipelineConfig(max_sectors=1))
+    llm.handlers[MarketScanOutput] = lambda p: MarketScanOutput(market_summary="m", sectors=[
+        SectorCall(sector="Energy", direction="upside", thesis="t", reasoning=reasoning(confidence=0.4)),
+        SectorCall(sector="Biotech", direction="upside", thesis="t", reasoning=reasoning(confidence=0.8)),
+    ])
+    report = await mw.run(AS_OF)
+    assert len(llm.prompts(SectorDeepDiveOutput)) == 1
+    assert '"sector": "Biotech"' in llm.prompts(SectorDeepDiveOutput)[0]
+    assert any(x.ticker == "Energy" and "limited to 1 sector" in x.summary for x in report.rejections)

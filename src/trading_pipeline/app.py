@@ -63,6 +63,9 @@ class Settings:
     anthropic_key_present: bool = False
     model: str | None = None
     effort: str | None = None
+    # Per-run size limits (set by `run --max-sectors/--shortlist`), for small first runs.
+    max_sectors: int | None = None
+    shortlist: int | None = None
 
     @classmethod
     def from_env(cls, env: Mapping[str, str] | None = None, *, db: str | None = None, profile: str | None = None,
@@ -97,7 +100,12 @@ class Settings:
                 llm = LLMConfig.model_validate({**llm.model_dump(), **updates})
             except ValueError as e:
                 raise ConfigError(f"invalid model/effort override: {e}") from e
-        return PipelineConfig(llm=llm, profile=self.profile())
+        limits: dict[str, Any] = {}
+        if self.max_sectors is not None:
+            limits["max_sectors"] = self.max_sectors
+        if self.shortlist is not None:
+            limits["shortlist_max_per_sector"] = self.shortlist
+        return PipelineConfig(llm=llm, profile=self.profile(), **limits)
 
     def open_store(self) -> Store:
         self.db_path.parent.mkdir(parents=True, exist_ok=True)

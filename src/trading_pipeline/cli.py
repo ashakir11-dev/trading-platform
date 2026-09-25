@@ -15,8 +15,9 @@ from datetime import datetime, time, timezone
 from typing import Any
 from zoneinfo import ZoneInfo
 
-from .app import ConfigError, Settings, load_profile, open_middleware
+from .app import ConfigError, Settings, equibles_providers, load_profile, open_middleware
 from .data.base import DataProviders
+from .health import render_checks, run_checks
 from .llm import LLMClient
 from .middleware import render_report
 from .schemas import PipelineReport, Position
@@ -28,6 +29,13 @@ MARKET_CLOSE = time(16, 0)
 
 class CliError(Exception):
     """User-facing error: printed as ``error: <message>``, exit code 1."""
+
+
+def _positive_int(text: str) -> int:
+    value = int(text)
+    if value < 1:
+        raise argparse.ArgumentTypeError("must be at least 1")
+    return value
 
 
 def parse_when(text: str) -> datetime:
@@ -60,6 +68,14 @@ def _parser() -> argparse.ArgumentParser:
                      help="YYYY-MM-DD (that day's close) or ISO datetime; default: now")
     run.add_argument("--backtest", action="store_true",
                      help="point-in-time run: no live quotes (implied for past dates)")
+    run.add_argument("--max-sectors", type=_positive_int, metavar="N",
+                     help="pursue at most N sectors from Agent 0 (highest confidence first)")
+    run.add_argument("--shortlist", type=_positive_int, metavar="N",
+                     help="forward at most N companies per sector to the company deep dive (default 30)")
+
+    chk = sub.add_parser("check", help="pre-flight: call every data source once (no LLM) and report what parsed")
+    chk.add_argument("--ticker", default="AAPL", help="company to probe (default AAPL)")
+    chk.add_argument("--sector", default="Health Care", help="sector to probe (default Health Care)")
 
     rep = sub.add_parser("report", help="show a saved report (latest by default)")
     rep.add_argument("run_id", nargs="?")
@@ -127,6 +143,8 @@ class _Cli:
     # -- commands -------------------------------------------------------------------------
 
     async def run(self) -> None:
+        self.settings.max_sectors = self.args.max_sectors
+        self.settings.shortlist = self.args.shortlist
         now = self.clock()
         as_of = self.args.as_of or now
         if as_of > now:
@@ -151,6 +169,18 @@ class _Cli:
         if report is None:
             raise CliError(f"no saved report for run {run_id}" if run_id else "no saved reports yet; use `run`")
         self._print_report(report)
+
+    async def check(self) -> None:
+        as_of = self.clock()
+        if self.providers is not None:
+            results = await run_checks(self.providers, as_of, ticker=self.args.ticker, sector=self.args.sector)
+        else:
+            async with equibles_providers(self.settings) as data:
+                results = await run_checks(data, as_of, ticker=self.args.ticker, sector=self.args.sector)
+        print(render_checks(results, ticker=self.args.ticker, sector=self.args.sector,
+                            as_of=as_of.astimezone(EASTERN).date()))
+        if any(r.status == "FAIL" for r in results):
+            raise CliError("data check failed (see FAIL rows above)")
 
     async def decide(self) -> None:
         a = self.args

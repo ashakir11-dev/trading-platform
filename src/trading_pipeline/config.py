@@ -25,6 +25,9 @@ class PipelineConfig(BaseModel):
     # recorded, this only controls what is forwarded to the company deep dive.
     shortlist_mode: Literal["ranked", "pass_fail"] = "ranked"
     shortlist_max_per_sector: int = 30
+    # Cap on sectors pursued after Agent 0 (highest-confidence first). None = no cap.
+    # Useful for small first runs; the other sector calls are still logged.
+    max_sectors: int | None = None
 
     # Running confidence score is an open decision: recorded for attribution, but
     # gates nothing unless set, and hidden from downstream agents to avoid anchoring.

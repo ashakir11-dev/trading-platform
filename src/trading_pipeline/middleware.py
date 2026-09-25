@@ -93,6 +93,13 @@ class Middleware:
         for call in scan.sectors:
             self._log(run_id, Stage.MARKET_SCAN, call.sector, call.direction, call.reasoning, call,
                       market_bundle, as_of)
+        pursued = scan.sectors
+        if cfg.max_sectors is not None and len(pursued) > cfg.max_sectors:
+            ranked = sorted(pursued, key=lambda c: c.reasoning.confidence, reverse=True)
+            pursued = ranked[: cfg.max_sectors]
+            for call in ranked[cfg.max_sectors:]:
+                rejections.append(Rejection(ticker=call.sector, stage=Stage.MARKET_SCAN,
+                                            summary=f"not pursued: run limited to {cfg.max_sectors} sector(s)"))
 
         # -- Agent 1: one independent pass per sector ---------------------------------------
         async def sector_pass(call: SectorCall):
@@ -112,8 +119,8 @@ class Middleware:
         conflicts: list[Conflict] = []
         surfaced: dict[str, tuple[str, str]] = {}  # ticker -> first (sector, direction)
         advanced: set[str] = set()
-        results = await asyncio.gather(*(sector_pass(c) for c in scan.sectors), return_exceptions=True)
-        for call, result in zip(scan.sectors, results):
+        results = await asyncio.gather(*(sector_pass(c) for c in pursued), return_exceptions=True)
+        for call, result in zip(pursued, results):
             if isinstance(result, BaseException):
                 log.exception("sector deep dive failed for %s", call.sector, exc_info=result)
                 rejections.append(Rejection(ticker=call.sector, stage=Stage.SECTOR_DEEP_DIVE, summary=f"error: {result}"))

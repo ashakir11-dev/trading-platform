@@ -337,3 +337,47 @@ def test_cli_run_through_real_wiring(monkeypatch, capsys):
     code = main(["--db", ":memory:", "run", "--backtest", "--as-of", "2026-06-01"],
                 env={"EQUIBLES_API_KEY": "k123"}, llm=llm, clock=lambda: AS_OF)
     assert code == 0 and "UNAVAILABLE" in llm.prompts(MarketScanOutput)[0]
+
+
+def test_run_size_limits(tmp_path, capsys):
+    from trading_pipeline.schemas import CompanyDeepDiveOutput
+
+    cli = Env(tmp_path)
+    assert cli("run", "--shortlist", "1") == 0
+    out_of(capsys)
+    # Ranked shortlist capped at 1: only the top-scoring company (BBB, 90) gets a deep dive.
+    assert [("Company: BBB" in p) for p in cli.llm.prompts(CompanyDeepDiveOutput)] == [True]
+    with pytest.raises(SystemExit) as exc:  # argparse rejects non-positive limits
+        cli("run", "--max-sectors", "0")
+    assert exc.value.code == 2
+    capsys.readouterr()
+
+
+def test_check_on_real_equibles_formats(tmp_path, capsys):
+    """`check` against the captured hosted-Equibles responses: everything parses."""
+    from datetime import datetime, timezone
+    from pathlib import Path
+
+    from trading_pipeline.app import build_providers
+
+    fix = Path(__file__).parent / "fixtures" / "equibles_live"
+
+    class Replay:
+        async def call_tool(self, name, arguments):
+            p = fix / f"{name}.md"
+            return p.read_text() if p.exists() else f"No data for {name}."
+
+    data, _ = build_providers(Replay())
+    when = datetime(2026, 9, 25, 21, tzinfo=timezone.utc)
+    code = main(["check"], env={"TRADING_DB": str(tmp_path / "db.sqlite3")}, providers=data, clock=lambda: when)
+    out = capsys.readouterr().out
+    assert code == 0, out
+    assert "0 FAIL" in out and "LLY" in out
+    assert "WARN  quote" in out  # last close, not a live quote, on the Free plan
+
+
+def test_check_fails_loudly_on_missing_data(tmp_path, capsys):
+    cli = Env(tmp_path)  # fixture fundamentals are a data gap
+    assert cli("check") == 1
+    captured = capsys.readouterr()
+    assert "FAIL  fundamentals" in captured.out and "data check failed" in captured.err
