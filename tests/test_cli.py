@@ -183,7 +183,7 @@ def test_missing_api_keys(tmp_path, capsys):
     env = {"TRADING_DB": str(tmp_path / "db.sqlite3")}
     # No injected LLM: the Anthropic key is required.
     assert main(["run"], env=env) == 1
-    assert "ANTHROPIC_API_KEY is not set" in capsys.readouterr().err
+    assert "ANTHROPIC_API_KEY (or TRADING_ANTHROPIC_API_KEY) is not set" in capsys.readouterr().err
     # LLM present but no injected providers: the Equibles key is required.
     assert main(["run"], env=env, llm=ScriptedLLM()) == 1
     assert "EQUIBLES_API_KEY is not set" in capsys.readouterr().err

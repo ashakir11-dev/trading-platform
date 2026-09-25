@@ -18,14 +18,15 @@ trading-pipeline --help          # or: python -m trading_pipeline --help
 | Setting | Environment variable | Flag | Default |
 |---|---|---|---|
 | Equibles API key (market data) | `EQUIBLES_API_KEY` | | required for `run`, `follow-up`, `review` |
-| Anthropic API key (agents) | `ANTHROPIC_API_KEY` | | required for `run`, `follow-up`, `review` |
+| Anthropic API key (agents) | `ANTHROPIC_API_KEY` or `TRADING_ANTHROPIC_API_KEY` | | required for `run`, `follow-up`, `review`; `TRADING_ANTHROPIC_API_KEY` wins if both are set |
 | Database | `TRADING_DB` | `--db` | `~/.trading-platform/pipeline.sqlite3` (directory is created) |
 | Investor profile | `TRADING_PROFILE` | `--profile` | built-in default profile |
 | Model override | `TRADING_MODEL` | `--model` | `LLMConfig.model` |
 | Effort override | `TRADING_EFFORT` | `--effort` | `LLMConfig.effort` |
 
-Flags win over environment variables. The Anthropic key is read by the SDK itself;
-the CLI only checks that it is set. Store-only commands (`report`, `decide`,
+Flags win over environment variables. Use `TRADING_ANTHROPIC_API_KEY` where
+`ANTHROPIC_API_KEY` is reserved, e.g. Claude Code on the web, whose environment
+settings keep that name for Claude Code's own login and do not pass it into sessions. Store-only commands (`report`, `decide`,
 `positions`, `close`, `notes`, `approve-note`, `profile`) need no keys.
 
 Keep keys out of shell history and the repo, e.g. in `~/.trading-platform/env`

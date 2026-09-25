@@ -60,7 +60,7 @@ class Settings:
     db_path: Path
     profile_path: Path | None = None
     equibles_api_key: str | None = None
-    anthropic_key_present: bool = False
+    anthropic_api_key: str | None = None
     model: str | None = None
     effort: str | None = None
     # Per-run size limits (set by `run --max-sectors/--shortlist`), for small first runs.
@@ -77,8 +77,9 @@ class Settings:
             db_path=Path(db or env.get("TRADING_DB") or DEFAULT_DB).expanduser(),
             profile_path=Path(profile).expanduser() if profile else None,
             equibles_api_key=env.get("EQUIBLES_API_KEY") or None,
-            # The Anthropic SDK reads the key itself; we only check that it is there.
-            anthropic_key_present=bool(env.get("ANTHROPIC_API_KEY")),
+            # TRADING_ANTHROPIC_API_KEY first: hosts that run Claude Code (e.g. Claude Code on
+            # the web) reserve ANTHROPIC_API_KEY and do not pass it into the session.
+            anthropic_api_key=env.get("TRADING_ANTHROPIC_API_KEY") or env.get("ANTHROPIC_API_KEY") or None,
             model=model or env.get("TRADING_MODEL") or None,
             effort=effort or env.get("TRADING_EFFORT") or None,
         )
@@ -117,10 +118,11 @@ class Settings:
                               "(see docs/operations.md).")
         return self.equibles_api_key
 
-    def require_anthropic_key(self) -> None:
-        if not self.anthropic_key_present:
-            raise ConfigError("ANTHROPIC_API_KEY is not set. It is needed to run the agents "
-                              "(see docs/operations.md).")
+    def require_anthropic_key(self) -> str:
+        if not self.anthropic_api_key:
+            raise ConfigError("ANTHROPIC_API_KEY (or TRADING_ANTHROPIC_API_KEY) is not set. It is needed "
+                              "to run the agents (see docs/operations.md).")
+        return self.anthropic_api_key
 
 
 def load_profile(path: str | Path) -> InvestorProfile:
@@ -237,10 +239,12 @@ class OfflineLLM:
 
 
 def anthropic_llm(settings: Settings, config: PipelineConfig) -> LLMClient:
-    settings.require_anthropic_key()
+    api_key = settings.require_anthropic_key()
+    import anthropic
+
     from .llm import AnthropicLLM
 
-    return AnthropicLLM(config.llm)
+    return AnthropicLLM(config.llm, anthropic.AsyncAnthropic(api_key=api_key))
 
 
 @asynccontextmanager
