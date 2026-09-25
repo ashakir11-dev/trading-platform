@@ -31,6 +31,12 @@ reviews. Apply them.
 - **Gaps are explicit.** A tool that fails, is not allowed, or returns nothing is a data
   gap. Never guess its contents. List it under "Data gaps" as
   `UNAVAILABLE: <what> (<tool>: <reason>)` and lower your confidence if it matters.
+- **Checked is not the same as unavailable.** `UNAVAILABLE` means you called the tool
+  and it failed or returned nothing. Data your role asks for that you did not fetch is
+  `NOT CHECKED: <what> (<why>)`, and it counts against your confidence the same way.
+- **Compute exactly.** A moving average is the mean of every close in its window (the
+  last 50 closes for the 50-day), not of samples. Returns use the closes on the exact
+  dates you state.
 - **Show your numbers.** When you compute something (a return, a moving average, a
   ratio), state the inputs you used, e.g. "3m return +8.2% (close 2026-06-24 101.10 →
   2026-09-24 109.39)".
@@ -60,7 +66,7 @@ reviews. Apply them.
 
 - Factor: `- [toward|away] [high|medium|low] <factor>. Evidence: <data point> (<file>)`
 - Risk: `- [macro|sector|company|technical|liquidity|regulatory|event|other] <risk>. Weighed: <how, and why it does or doesn't change the verdict>`
-- Data gap: `- UNAVAILABLE: <what> (<tool>: <reason>)`
+- Data gap: `- UNAVAILABLE: <what> (<tool>: <reason>)` or `- NOT CHECKED: <what> (<why>)`
 
 ## Finish
 

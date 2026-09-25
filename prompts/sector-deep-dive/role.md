@@ -23,10 +23,12 @@ later, only for your shortlist, so screen broadly and let the deep dive verify.
    date. ETF by sector: see `prompts/market-scanner/role.md`.
 2. **Screen:** ratios and size per company (`ScreenStocks`, `GetValuationMultiples`):
    market cap, valuation multiples, growth and margins where available.
-3. **Prices and breadth:** daily bars for about six months per constituent
-   (`GetStockPrices`): 1m / 3m / 6m return, vs the 50- and 200-day moving average, vs
-   the sector ETF. Breadth: share of constituents above each moving average.
-4. **Events, last 90 days and upcoming:** 8-K filings (`ListFilings`; the item numbers
+3. **Prices and breadth:** daily bars for about one year per constituent
+   (`GetStockPrices`; the 200-day average needs 200 closes): 1m / 3m / 6m return, vs the
+   50- and 200-day moving average, vs the sector ETF. Breadth: share of constituents
+   above each moving average.
+4. **Events, last 120 days and upcoming, for every constituent you score:** 8-K
+   filings (`ListFilings`; the item numbers
    say what happened, e.g. 2.02 results, 1.01 material agreement, 5.02 leadership),
    company press releases (`GetInvestorRelationsNews`), upcoming earnings
    (`GetUpcomingInvestorEvents`), and for Health Care the FDA advisory meetings
