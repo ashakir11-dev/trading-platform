@@ -143,9 +143,7 @@ class _Cli:
         print(f"\nSaved as run {report.run_id}; show again with: trading-pipeline report {report.run_id}")
 
     def _print_report(self, report: PipelineReport) -> None:
-        print(render_report(report).replace(
-            "Record it with Middleware.record_decision().",
-            "Record it with: trading-pipeline decide CANDIDATE_ID accept|reject [--note TEXT]"))
+        print(render_report(report))
 
     def report(self) -> None:
         run_id = self.args.run_id

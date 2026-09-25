@@ -144,9 +144,12 @@ NOISE_CATEGORIES = {
     "price_action", "market_movers", "listicle", "technical_commentary", "sponsored",
     "rating_reiteration", "options_activity", "opinion",
 }
-# 8-K items that signal real change: agreements, results, impairments, delisting,
-# auditor changes/non-reliance, leadership changes, charter amendments.
-MATERIAL_8K_ITEMS = {"1.01", "1.02", "1.03", "2.01", "2.02", "2.03", "2.05", "2.06",
+# 8-K items that signal real change: agreements, bankruptcy, cybersecurity incidents,
+# results, impairments, delisting, auditor changes/non-reliance, leadership changes,
+# charter amendments. Items 7.01 (Reg FD) and 8.01 (other events) are not on the list:
+# they carry some real news (e.g. biotech trial results) but mostly routine releases,
+# and the item number alone can't tell them apart.
+MATERIAL_8K_ITEMS = {"1.01", "1.02", "1.03", "1.05", "2.01", "2.02", "2.03", "2.05", "2.06",
                      "3.01", "3.03", "4.01", "4.02", "5.01", "5.02", "5.03"}
 
 _NOISE = re.compile(

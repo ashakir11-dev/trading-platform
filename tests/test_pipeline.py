@@ -270,3 +270,14 @@ async def test_macro_reaches_every_stage_and_filings_reach_company_stage():
         assert "MACRO-OK" in llm.prompts(output)[0]
     company = next(p for p in llm.prompts(CompanyDeepDiveOutput) if "Company: AAA" in p)
     assert "FILING-MARK" in company
+
+
+async def test_second_review_of_same_position_is_blocked():
+    bars = make_bars([100, 101], AS_OF + timedelta(hours=1))
+    mw, _, store = build(prices=FixturePrices({"AAA": bars}))
+    report = await mw.run(AS_OF)
+    pos = mw.record_decision(report.recommendations[0].candidate.id, True, opened_at=AS_OF + timedelta(hours=1))
+    await mw.review_position(pos.id, now=bars[-1].ts)
+    with pytest.raises(ValueError, match="already reviewed"):
+        await mw.review_position(pos.id, now=bars[-1].ts)
+    assert len(store.improvements(approved_only=False)) == 1

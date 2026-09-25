@@ -337,6 +337,8 @@ class Middleware:
         position = self._store.position(position_id)
         if position is None:
             raise KeyError(position_id)
+        if self._store.process_review(position_id) is not None:
+            raise ValueError(f"position {position_id} was already reviewed")
         end = position.closed_at or now
         bars = await self._data.prices.bars(position.ticker, position.opened_at.date(), end)
         outcome = compute_outcome(position, bars, now, self.config.profile.level_trigger)
@@ -382,5 +384,5 @@ def render_report(report: PipelineReport) -> str:
         lines += ["", f"Conflicts ({len(report.conflicts)}):"]
         lines += [f"- {c.ticker}: {c.kind} — {c.first_sector} ({c.first_direction}) vs "
                   f"{c.other_sector} ({c.other_direction})" for c in report.conflicts]
-    lines += ["", "You make the call. Record it with Middleware.record_decision()."]
+    lines += ["", "You make the call. Record it with: trading-pipeline decide CANDIDATE_ID accept|reject [--note TEXT]"]
     return "\n".join(lines)

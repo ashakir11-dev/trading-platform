@@ -30,11 +30,13 @@ def tables(text: str) -> list[list[dict[str, str]]]:
     out: list[list[dict[str, str]]] = []
     i = 0
     while i < len(lines) - 1:
-        if lines[i].strip().startswith("|") and _SEPARATOR.match(lines[i + 1].strip()):
+        # Some tools (e.g. ListFilings) omit the outer pipes, so a header is any line with
+        # a pipe followed by a separator line.
+        if "|" in lines[i] and _SEPARATOR.match(lines[i + 1].strip()):
             header = split_row(lines[i])
             rows = []
             j = i + 2
-            while j < len(lines) and lines[j].strip().startswith("|"):
+            while j < len(lines) and lines[j].strip() and "|" in lines[j]:
                 cells = split_row(lines[j])
                 if len(cells) == len(header):
                     rows.append(dict(zip(header, cells)))
@@ -54,7 +56,7 @@ def find_table(text: str, required: set[str]) -> list[dict[str, str]] | None:
     # A table with a matching header but no rows is still "found" (empty result).
     lines = text.splitlines()
     for k, line in enumerate(lines[:-1]):
-        if line.strip().startswith("|") and required <= set(split_row(line)) and _SEPARATOR.match(lines[k + 1].strip()):
+        if "|" in line and required <= set(split_row(line)) and _SEPARATOR.match(lines[k + 1].strip()):
             return []
     return None
 

@@ -7,9 +7,9 @@ than to bad reasoning. Replace each with a real provider once a source is chosen
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime, timezone
 
-from .base import DataSnapshot
+from .base import DataSnapshot, PriceBar
 
 
 def _gap(kind: str, subject: str, as_of: datetime, note: str) -> DataSnapshot:
@@ -48,3 +48,29 @@ class UnavailableFilings:
 class UnavailableMacro:
     async def macro(self, as_of: datetime) -> list[DataSnapshot]:
         return [_gap("macro", "market", as_of, "No macro data source configured.")]
+
+
+class UnavailablePrices:
+    """Gap placeholder for prices: explicit gap snapshots, no bars."""
+
+    async def bars(self, ticker: str, start: date, as_of: datetime, interval: str = "1d") -> list[PriceBar]:
+        return []
+
+    async def ohlcv(self, ticker: str, start: date, as_of: datetime, interval: str = "1d") -> DataSnapshot:
+        return _gap(f"ohlcv:{interval}", ticker, as_of, "No price source configured.")
+
+    async def indicators(self, ticker: str, as_of: datetime, interval: str = "1d") -> DataSnapshot:
+        return _gap(f"indicators:{interval}", ticker, as_of, "No price source configured.")
+
+    async def pivots(self, ticker: str, as_of: datetime, interval: str = "1d") -> DataSnapshot:
+        return _gap(f"pivots:{interval}", ticker, as_of, "No price source configured.")
+
+
+class UnavailableQuotes:
+    """Gap placeholder for live quotes. The stale-entry rule falls back to the last close."""
+
+    async def quote(self, ticker: str) -> DataSnapshot:
+        return _gap("quote", ticker, datetime.now(timezone.utc), "No live quote source configured.")
+
+    async def positions(self) -> DataSnapshot:
+        return _gap("positions", "account", datetime.now(timezone.utc), "No account source configured.")

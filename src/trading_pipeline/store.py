@@ -153,6 +153,9 @@ class Store:
     def save_process_review(self, position_id: str, r: ProcessReviewOutput) -> None:
         self._put("process_review", r, id=position_id, position_id=position_id)
 
+    def process_review(self, position_id: str) -> ProcessReviewOutput | None:
+        return self._get("process_review", position_id, ProcessReviewOutput)
+
     def save_improvement(self, n: ImprovementNote) -> None:
         self._put("improvement", n, id=n.id, position_id=n.source_position_id)
 

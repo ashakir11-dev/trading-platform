@@ -30,3 +30,9 @@ def test_number():
     assert number("$1,234") == 1234 and number("-$5.10") == Decimal("-5.10")
     assert number("12.5%") == Decimal("12.5") and number("1.2B") == Decimal("1.2e9")
     assert number("2.01 (as filed)") == Decimal("2.01") and number("—") is None and number("abc") is None
+
+
+def test_tables_without_outer_pipes():
+    text = "Filings:\n\nTicker | Form | Filed\n--- | --- | ---\nACME | 8-K | 2026-05-01\nACME | 10-Q | 2026-04-30\n\n_Note | not a row_"
+    rows = find_table(text, {"Ticker", "Form"})
+    assert [r["Form"] for r in rows] == ["8-K", "10-Q"]

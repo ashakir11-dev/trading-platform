@@ -17,19 +17,25 @@ import os
 from collections.abc import AsyncIterator, Callable, Mapping
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
-from datetime import date, datetime
 from pathlib import Path
 from typing import Any
 
 from .config import LLMConfig, PipelineConfig
-from .data.base import DataProviders, DataSnapshot, PriceBar
+from .data.base import DataProviders
 from .data.equibles import EQUIBLES_MCP_URL, FACT_TOOL
-from .data.gaps import UnavailableFilings, UnavailableFundamentals, UnavailableMacro, UnavailableNews, UnavailableSectorData
+from .data.gaps import (
+    UnavailableFilings,
+    UnavailableFundamentals,
+    UnavailableMacro,
+    UnavailableNews,
+    UnavailablePrices,
+    UnavailableQuotes,
+    UnavailableSectorData,
+)
 from .data.mcp import HttpMcpClient, McpToolCaller
 from .llm import LLMClient
 from .middleware import Middleware
 from .profile import InvestorProfile
-from .schemas import utcnow
 from .store import Store
 
 log = logging.getLogger(__name__)
@@ -122,36 +128,6 @@ def load_profile(path: str | Path) -> InvestorProfile:
 # --------------------------------------------------------------------------------------
 # Providers
 # --------------------------------------------------------------------------------------
-
-
-def _gap(kind: str, subject: str, as_of: datetime, note: str) -> DataSnapshot:
-    return DataSnapshot(kind=kind, source="unavailable", subject=subject, as_of=as_of, is_gap=True, note=note)
-
-
-class UnavailablePrices:
-    """Gap placeholder for prices: explicit gap snapshots, no bars."""
-
-    async def bars(self, ticker: str, start: date, as_of: datetime, interval: str = "1d") -> list[PriceBar]:
-        return []
-
-    async def ohlcv(self, ticker: str, start: date, as_of: datetime, interval: str = "1d") -> DataSnapshot:
-        return _gap(f"ohlcv:{interval}", ticker, as_of, "No price source configured.")
-
-    async def indicators(self, ticker: str, as_of: datetime, interval: str = "1d") -> DataSnapshot:
-        return _gap(f"indicators:{interval}", ticker, as_of, "No price source configured.")
-
-    async def pivots(self, ticker: str, as_of: datetime, interval: str = "1d") -> DataSnapshot:
-        return _gap(f"pivots:{interval}", ticker, as_of, "No price source configured.")
-
-
-class UnavailableQuotes:
-    """Gap placeholder for live quotes. The stale-entry rule falls back to the last close."""
-
-    async def quote(self, ticker: str) -> DataSnapshot:
-        return _gap("quote", ticker, utcnow(), "No live quote source configured.")
-
-    async def positions(self) -> DataSnapshot:
-        return _gap("positions", "account", utcnow(), "No account source configured.")
 
 
 @dataclass(frozen=True)
