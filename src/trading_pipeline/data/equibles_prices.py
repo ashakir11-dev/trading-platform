@@ -307,10 +307,10 @@ LIVE_QUOTE_TOOL = "GetLiveQuote"
 def parse_live_quotes(text: str) -> dict[str, dict[str, Any]]:
     """GetLiveQuote (Equibles Cloud, paid plans) -> {TICKER: {price, timestamp, stale}}.
 
-    Only the Free-plan answer (an upgrade notice, no table) has been seen so far, so this
-    accepts a table only when it clearly has a ticker column and a last-trade/price column,
-    and returns {} otherwise; callers then fall back to the last close. Run
-    ``trading-pipeline check`` after upgrading to confirm the quote row shows "live".
+    Verified against real Free (upgrade notice, no table) and Pro (Ticker/Price/As of
+    (UTC)/Stale table) answers. Accepts a table only when it has a ticker column and a
+    last-trade/price column, and returns {} otherwise; callers then fall back to the last
+    close.
     """
     for rows in tables(text or ""):
         if not rows:
