@@ -20,8 +20,8 @@ class UnavailableSectorData:
     async def market_overview(self, as_of: datetime) -> list[DataSnapshot]:
         return [_gap("sector_performance", "market", as_of, "OPEN GAP: no live/historical sector performance source.")]
 
-    async def sector_constituents(self, sector: str, as_of: datetime) -> DataSnapshot:
-        return _gap("sector_constituents", sector, as_of, "OPEN GAP: no sector screening source.")
+    async def sector_screen(self, sector: str, as_of: datetime) -> list[DataSnapshot]:
+        return [_gap("screen", sector, as_of, "OPEN GAP: no sector screening source.")]
 
     async def sector_breadth(self, sector: str, as_of: datetime) -> DataSnapshot:
         return _gap("sector_breadth", sector, as_of, "OPEN GAP: no sector breadth source.")

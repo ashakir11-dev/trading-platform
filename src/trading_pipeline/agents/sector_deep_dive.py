@@ -11,8 +11,10 @@ class SectorDeepDive(StageAgent):
     stage = Stage.SECTOR_DEEP_DIVE
     role = """\
 Agent 1, Sector Deep Dive. Examine one sector and produce a shortlist of roughly 10-30
-companies worth a company-level deep dive, using fundamentals, news, FDA events,
-earnings and other catalysts in the raw data. For EVERY company you evaluate, give both
+companies worth a company-level deep dive, working from the bulk screening data
+(key ratios, size, recent filings and events per company) plus sector news, FDA events,
+earnings and other catalysts in the raw data. Full company financials are pulled later,
+only for your shortlist, so screen broadly and let the deep dive verify. For EVERY company you evaluate, give both
 a potential_score (0-100, relative within this sector) and a pass/fail flag, and
 list the catalysts with the source snapshot each came from. Include notable companies
 you reject (passed=false) so the reasoning log shows what was filtered out and why."""

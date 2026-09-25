@@ -125,10 +125,18 @@ class QuoteProvider(Protocol):
 
 
 class SectorDataProvider(Protocol):
-    """Sector performance / breadth / screening. OPEN GAP."""
+    """Sector performance / breadth / screening. OPEN GAP (breadth to be derived from prices)."""
 
     async def market_overview(self, as_of: datetime) -> list[DataSnapshot]: ...
-    async def sector_constituents(self, sector: str, as_of: datetime) -> DataSnapshot: ...
+    async def sector_screen(self, sector: str, as_of: datetime) -> list[DataSnapshot]:
+        """Cheap bulk screening data for every company in the sector (Agent 1's input).
+
+        One snapshot per company, ``subject`` = its ticker, ``kind`` = "screen": key ratios,
+        size, recent filings/events. Full per-company fundamentals are fetched later, only
+        for shortlisted companies (company deep dive). A gap may return one sector-level
+        snapshot instead.
+        """
+        ...
     async def sector_breadth(self, sector: str, as_of: datetime) -> DataSnapshot: ...
 
 

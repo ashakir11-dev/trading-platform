@@ -63,6 +63,19 @@ async def test_raw_data_passes_through_to_later_stages():
     assert "UNAVAILABLE" in tech_prompt  # gaps are explicit, not silently empty
 
 
+async def test_company_prompts_carry_only_relevant_raw_data():
+    mw, llm, _ = build()
+    await mw.run(AS_OF)
+    # Agent 1 screens the whole sector.
+    sector_prompt = llm.prompts(SectorDeepDiveOutput)[0]
+    assert all(f"SCREEN-{t}" in sector_prompt for t in ("AAA", "BBB", "CCC"))
+    # Company and technical prompts keep market + sector data and their own row only.
+    for output in (CompanyDeepDiveOutput, TechnicalOutput):
+        prompt = next(p for p in llm.prompts(output) if "Company: AAA" in p)
+        assert "SCREEN-AAA" in prompt and "SCREEN-BBB" not in prompt
+        assert '"kind": "sector_breadth"' in prompt and '"kind": "sector_performance"' in prompt
+
+
 async def test_upstream_confidence_hidden_by_default():
     mw, llm, _ = build()
     await mw.run(AS_OF)

@@ -156,9 +156,10 @@ class FixtureSectors:
         return [DataSnapshot(kind="sector_performance", source="fixture", subject="market", as_of=ts,
                              payload={"Biotech": 0.04})]
 
-    async def sector_constituents(self, sector: str, as_of: datetime) -> DataSnapshot:
-        return DataSnapshot(kind="sector_constituents", source="fixture", subject=sector, as_of=as_of,
-                            payload=["AAA", "BBB", "CCC"])
+    async def sector_screen(self, sector: str, as_of: datetime) -> list[DataSnapshot]:
+        return [DataSnapshot(kind="screen", source="fixture", subject=t, as_of=as_of,
+                             payload={"ticker": t, "pe": pe, "screen_marker": f"SCREEN-{t}"})
+                for t, pe in (("AAA", 18), ("BBB", 25), ("CCC", 40))]
 
     async def sector_breadth(self, sector: str, as_of: datetime) -> DataSnapshot:
         return DataSnapshot(kind="sector_breadth", source="fixture", subject=sector, as_of=as_of,

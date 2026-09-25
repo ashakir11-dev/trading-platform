@@ -95,9 +95,10 @@ class Middleware:
         # -- Agent 1: one independent pass per sector ---------------------------------------
         async def sector_pass(call: SectorCall):
             bundle = RawDataBundle(as_of=as_of, snapshots=list(market_bundle.snapshots))
-            # Screening data is expected to carry per-company fundamentals/news for the sector.
+            # Bulk screen for every company in the sector; deep per-company data comes later,
+            # only for the shortlist (design decision: bulk screen at Agent 1, deep later).
+            bundle.extend(await self._data.sectors.sector_screen(call.sector, as_of))
             bundle.extend([
-                await self._data.sectors.sector_constituents(call.sector, as_of),
                 await self._data.sectors.sector_breadth(call.sector, as_of),
                 await self._data.news.events(call.sector, as_of - timedelta(days=90), as_of),
             ])
@@ -131,7 +132,9 @@ class Middleware:
 
         # -- Company deep dive: one independent pass per company -----------------------------
         async def company_pass(cand: Candidate, call: SectorCall, upstream: RawDataBundle):
-            bundle = RawDataBundle(as_of=as_of, snapshots=list(upstream.snapshots))
+            # Relevant-subset pass-through: market-level data plus everything about this
+            # company and its sector, but not other companies' screen rows.
+            bundle = upstream.filter(subjects={cand.sector, cand.ticker})
             bundle.extend([
                 await self._data.fundamentals.fundamentals(cand.ticker, as_of),
                 await self._data.news.events(cand.ticker, as_of - timedelta(days=180), as_of),

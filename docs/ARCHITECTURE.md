@@ -47,8 +47,8 @@ flowchart TD
 | Stage | Module | Runs | Input | Output |
 |---|---|---|---|---|
 | Agent 0: Market Scanner | `agents/market_scanner.py` | once per run | raw market and sector data | sectors with upside/downside potential |
-| Agent 1: Sector Deep Dive | `agents/sector_deep_dive.py` | one per sector, in parallel | sector call + raw data (fundamentals, news, FDA, earnings) | shortlist of ~10-30 companies |
-| Company Deep Dive | `agents/company_deep_dive.py` | one per company, in parallel | shortlist entry + raw company data | worthiness verdict; catalysts checked |
+| Agent 1: Sector Deep Dive | `agents/sector_deep_dive.py` | one per sector, in parallel | sector call + **bulk screen of every company in the sector** (key ratios, size, recent filings/events) + sector breadth, news, FDA, earnings | shortlist of ~10-30 companies, **ranked by potential score** |
+| Company Deep Dive | `agents/company_deep_dive.py` | one per company, in parallel | shortlist entry + market/sector data + **full company data** (fundamentals, filings, company news) | worthiness verdict; catalysts checked |
 | Technical Analysis | `agents/technical_analysis.py` | one per company, in parallel, **no cross-comparison** | candidate + raw price/indicator/pivot data | chart verdict + entry / exit / stop-loss, or rejection |
 | Middleware | `middleware.py` | orchestrates | | report to the user |
 | Agent 5: Follow-Up | `agents/follow_up.py` | on a schedule, per accepted position | position + fresh data | cheap tripwire checks, plus a deep full re-review at an interval |
@@ -63,7 +63,10 @@ flowchart TD
 2. **Raw-data pass-through.** Each agent receives the prior agent's report
    **and** the raw data behind it, so a bad upstream filter can't fully blind
    the next stage. In code, every stage input carries the upstream report plus a
-   `RawDataBundle`. Stages add to the bundle as it moves forward.
+   `RawDataBundle`. Stages add to the bundle as it moves forward. **Scope:** a
+   company's prompts carry market-level data plus everything about that company and
+   its sector, but not other companies' rows (`RawDataBundle.filter`). Nothing about
+   the company itself is ever dropped.
 3. **Two independent filters.** Fundamental worthiness and technical
    tradeability are uncorrelated. Rejecting a fundamentally strong company on
    chart grounds is a normal outcome, not an error.
@@ -82,15 +85,27 @@ flowchart TD
 7. **Swing or long-term horizons only, never day trading.** Cross-stage data
    staleness is therefore not a concern.
 
-## 4. Open decisions (from the design discussion)
+## 4. Design decisions
 
-- **Agent 1 output format:** a ranked list with potential scores, or a plain
-  pass/fail list? *Not decided.* See the decisions below for how the code keeps
-  both options open.
-- **Running confidence score:** a score that travels with each candidate
-  through the whole pipeline. Its trajectory across stages shows which agent
-  introduced doubt, which helps attribution when a trade fails without one
-  clear agent error. *Still being considered.*
+**Decided (2026-09-25):**
+
+| Decision | Choice | Why |
+|---|---|---|
+| Agent 1 output format | **Ranked by potential score (0-100)**; passing companies are forwarded best-first, capped per sector. Pass/fail is still recorded. | Gives the feedback loop a gradient ("scored 85 and failed" teaches more than "passed and failed") and lets later stages triage. |
+| Running confidence score | **Attribution only.** Recorded at every stage as a trajectory; gates nothing; hidden from downstream agents. | Traces where doubt entered without anchoring later agents or trusting uncalibrated scores. Revisit gating once testing shows calibration. |
+| Agent 1 data | **Bulk screen at Agent 1, deep data later.** Agent 1 screens every company in the sector from cheap bulk data; full per-company fundamentals are fetched only for the shortlist. | Full fundamentals for a whole sector cost ~28 Equibles calls per company. |
+| Raw-data pass-through scope | **Relevant subset**: market + sector + the company's own data. | Keeps the principle (no stage blinded by an upstream filter) at a fraction of the token cost of repeating every company's data in ~30 prompts. |
+
+**Open:**
+
+- **Backtesting and forward (paper) testing.** Deferred. Known constraints for when we
+  pick it up: only dates after every model's training cutoff are honest evidence;
+  prices must be survivorship-free and fundamentals point-in-time; a simulated decision
+  policy must be stored apart from real user decisions; any broker paper-trading
+  integration would relax the no-orders rule and needs an explicit decision.
+- **Proposed, not decided:** keep our own daily snapshots of scheduled-event calendars
+  (earnings, FDA), since no affordable source records past expected dates; and add new
+  8-K filings (e.g. items 2.02, 5.02, 1.01) as an Agent 5 tripwire.
 
 ## 5. Data requirements
 
@@ -183,8 +198,9 @@ Choices made while scaffolding. Each one is easy to revisit.
 | Topic | Decision | Where |
 |---|---|---|
 | Language / LLM | Python 3.11+, the official `anthropic` SDK, structured outputs via `client.beta.messages.parse` with Pydantic models, adaptive thinking, server-side refusal fallbacks (`fallbacks="default"`). Model and effort are set in config. | `llm.py`, `config.py` |
-| Agent 1 format (open) | The schema records **both** a `potential_score` (0-100) and a `passed` flag per company, so both are always logged. `PipelineConfig.shortlist_mode` (`"ranked"` or `"pass_fail"`) only controls what gets forwarded. The feedback loop gets the score gradient either way. | `schemas.py`, `middleware.py` |
-| Confidence score (open) | Every stage emits a 0-1 `confidence` for each candidate. It is stored as a trajectory on the `Candidate` (`confidence_trajectory`) and used for attribution. **It gates nothing by default** (`confidence_gate=None`), and **downstream agents don't see upstream confidence numbers by default** (`show_upstream_confidence=False`) to avoid anchoring. | `schemas.py`, `middleware.py` |
+| Agent 1 format (**decided: ranked**) | The schema records **both** a `potential_score` (0-100) and a `passed` flag per company, so both are always logged. `PipelineConfig.shortlist_mode` defaults to `"ranked"`; `"pass_fail"` remains available. | `schemas.py`, `middleware.py` |
+| Confidence score (**decided: attribution only**) | Every stage emits a 0-1 `confidence` for each candidate. It is stored as a trajectory on the `Candidate` (`confidence_trajectory`) and used for attribution. **It gates nothing by default** (`confidence_gate=None`), and **downstream agents don't see upstream confidence numbers by default** (`show_upstream_confidence=False`) to avoid anchoring. | `schemas.py`, `middleware.py` |
+| Agent 1 bulk screen | `SectorDataProvider.sector_screen` returns one `screen` snapshot per company (subject = ticker). The company deep dive filters the sector bundle to market + sector + its own ticker before adding full company data. | `data/base.py`, `middleware.py` |
 | Point-in-time data | Every provider call takes `as_of`. `RawDataBundle.add` rejects a snapshot dated after the run's `as_of`, which guards against look-ahead in backtests. | `data/base.py` |
 | Data access | The middleware fetches data through provider interfaces, not the agents. Vendors are not decided (§5). `data/mcp.py` holds skeleton adapters for the original candidates (Massive, Robinhood) behind a small `McpToolCaller` protocol; the tool-name mapping is TODO. Any other vendor is a new adapter that implements the same protocols. Any quotes/account adapter must have **no order methods**. | `data/base.py`, `data/mcp.py` |
 | User decisions | Stored in a separate table. `Store.review_trail()` (what the process agent reads) never includes them. | `store.py` |
