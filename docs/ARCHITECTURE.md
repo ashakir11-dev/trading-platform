@@ -120,12 +120,21 @@ compares live-price options in more depth. [`equibles-evaluation.md`](equibles-e
 evaluates Equibles (self-hosted SEC/FRED/FDA data and cheap Cloud prices).
 
 **Chosen so far:**
-- **Fundamentals: self-hosted Equibles** (`data/equibles.py`, `EquiblesFundamentals`).
-  The connector reads Equibles' Postgres tables directly, because its MCP tools are
-  not point-in-time. A fact is visible only if it was filed on an earlier US/Eastern day
-  than `as_of`, and the latest such filing wins, so restatements count only after their
-  filing date. It resolves tickers to companies by listing dates (to handle ticker reuse)
-  and reports an ambiguous or unknown ticker as a data gap.
+- **Fundamentals: Equibles, hosted MCP** (`data/equibles.py`, `EquiblesFundamentals`),
+  at `https://mcp.equibles.com/mcp` with an API key. No database to run. For each concept
+  it asks `GetFinancialFact` for both the originally reported and the latest restated
+  values, each carrying its filing date, and keeps only rows filed on an earlier
+  US/Eastern day than `as_of`. For each period the latest such filing wins, so a
+  restatement counts only after it was filed. (Only a middle restatement of a period
+  restated twice can be missed.) Two caveats:
+  - Equibles adjusts per-share values to today's share basis. In backtests that
+    reveals future splits, so those values are dropped and noted.
+  - The hosted tool resolves tickers to today's company, so a reused ticker can point
+    at the wrong company in old backtests. The payload names the company so this is
+    visible.
+  Budget: 2 calls per concept (28 per ticker by default), so real runs need the Plus
+  plan (10,000 calls/day). `EquiblesPostgresFundamentals` is the exact, self-hosted
+  alternative (reads Equibles' Postgres, resolves tickers by listing dates).
 
 **Criteria for choosing providers:**
 - **Point-in-time history.** Data must be retrievable as it was known on a past

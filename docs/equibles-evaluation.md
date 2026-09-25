@@ -24,8 +24,12 @@ from the research environment, so nothing here was run against live data.*
 | Does the filter create look-ahead? | **No.** At worst, a value becomes visible later (at the 10-Q/10-K filing date) than it could have from an earlier 8-K. That delay is conservative, not leaky. | Same file |
 | Can the query tools answer "as of date D"? | **Not directly.** The MCP tools offer "latest restated" (leaks look-ahead) or `asOriginallyReported` (first periodic filing). Neither means "latest filed on or before D": a restatement filed before D should be visible at D but isn't under `asOriginallyReported`. `toDate` filters by period end, not by filing date. | `FinancialFactsTools.cs` lines ~64–85, ~756–767 |
 
-**Conclusion:** the stored data **is point-in-time capable**, but the MCP query layer is
-not. A `FundamentalsProvider` adapter must read the self-hosted Postgres tables directly
+**Conclusion:** the stored data **is point-in-time capable**. *Update:* the MCP query
+layer can be used point-in-time too. `GetFinancialFact` returns each row's Filed date in
+both modes, so fetching both and filtering by filing date reconstructs what was known at
+`as_of` (only a middle restatement of a twice-restated period can be missed). That is what
+the hosted provider does. The rest of this paragraph applies to the self-hosted
+Postgres provider. A `FundamentalsProvider` adapter must read the self-hosted Postgres tables directly
 with `filed_date < as_of` (make a value visible from the next trading day after its filing
 date, since `FiledDate` has no time), and pick the latest filed row per concept and period.
 For backtests, avoid the "latest restated" tools entirely.
@@ -39,7 +43,12 @@ For backtests, avoid the "latest restated" tools entirely.
 | Pro | $49.99/mo ($19.99 first month) | **Real-time** stocks and options | "Everything in Plus" and more; up to 5 web feeds |
 | Custom | Quote | Broader coverage, redistribution rights | Custom |
 
-Cloud has a REST API, which the self-hosted README doesn't mention. Unknown for Cloud:
+Cloud has a REST API, which the self-hosted README doesn't mention. The hosted MCP
+endpoint is `https://mcp.equibles.com/mcp` (OAuth, or an API key as `Bearer` /
+`?api_key=`). Financial-statement answers are always markdown tables. The hosted MCP
+per-share values are split-adjusted to today's basis (a backtest leak; the provider drops
+them in backtests). The hosted tool resolves tickers to today's company, so reused
+tickers are a backtest risk. Unknown for Cloud:
 whether prices are consolidated or single-venue, which vendor licenses them, whether
 delisted tickers are covered, whether there is a batch/snapshot endpoint, whether REST
 supports as-of-filing-date queries, and the personal-use license terms.

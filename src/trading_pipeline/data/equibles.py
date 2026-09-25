@@ -1,10 +1,17 @@
-"""FundamentalsProvider backed by a self-hosted Equibles database.
+"""Point-in-time SEC fundamentals from Equibles.
 
-Equibles (https://github.com/daniel3303/Equibles) ingests SEC Company Facts into
-Postgres and keeps every filing's value as its own row (restatements are separate
-rows keyed by accession number, each with a ``FiledDate``). Its MCP tools only
-offer "latest restated" or "as originally reported", neither of which is
-point-in-time, so this adapter reads the tables directly.
+Equibles (https://equibles.com, https://github.com/daniel3303/Equibles) ingests SEC
+Company Facts and keeps every filing's value with its filing date and accession
+number. Two providers:
+
+* ``EquiblesFundamentals`` (default): the hosted MCP server
+  (``https://mcp.equibles.com/mcp``). No database to run. ``GetFinancialFact`` returns
+  each value with its Filed date in either "latest restated" or "as originally
+  reported" mode; fetching both and keeping only rows filed before ``as_of``
+  reconstructs what was known then. (Only a middle restatement of a period restated
+  twice can be missed.)
+* ``EquiblesPostgresFundamentals``: reads a self-hosted Equibles Postgres directly
+  and sees every filing, for exact point-in-time.
 
 Point-in-time rule: a fact is visible at ``as_of`` only if it was filed on an
 earlier US/Eastern calendar day. ``FiledDate`` carries no time of day and SEC
@@ -18,13 +25,16 @@ See docs/equibles-evaluation.md.
 
 from __future__ import annotations
 
+import asyncio
+import re
 from collections.abc import Awaitable, Callable, Sequence
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 from typing import Any
 from zoneinfo import ZoneInfo
 
 from .base import DataSnapshot
+from .mcp import McpToolCaller
 
 Query = Callable[[str, dict[str, Any]], Awaitable[list[dict[str, Any]]]]
 
@@ -108,7 +118,8 @@ def point_in_time(rows: Sequence[dict[str, Any]]) -> list[dict[str, Any]]:
         first = min(group, key=lambda r: (r["filed"], r["accession"]))
         value = latest["value"]
         out.append({
-            "concept": f'{_TAXONOMY.get(latest["taxonomy"], latest["taxonomy"])}:{latest["tag"]}',
+            "concept": (f'{_TAXONOMY.get(latest["taxonomy"], latest["taxonomy"])}:{latest["tag"]}'
+                        if latest["taxonomy"] is not None else latest["tag"]),
             "label": latest["label"],
             "unit": latest["unit"],
             "period_type": _PERIOD_TYPE.get(latest["period_type"], latest["period_type"]),
@@ -124,10 +135,10 @@ def point_in_time(rows: Sequence[dict[str, Any]]) -> list[dict[str, Any]]:
             "first_filed": first["filed"].isoformat(),
         })
     out.sort(key=lambda f: (f["concept"], f["period_end"], f["period_start"]))
-    return out
+    return [{k: v for k, v in f.items() if v is not None} for f in out]
 
 
-class EquiblesFundamentals:
+class EquiblesPostgresFundamentals:
     """Point-in-time SEC fundamentals from a self-hosted Equibles Postgres database."""
 
     def __init__(self, query: Query, *, concepts: Sequence[str] = DEFAULT_CONCEPTS,
@@ -137,8 +148,8 @@ class EquiblesFundamentals:
         self._lookback = timedelta(days=365 * lookback_years)
 
     @classmethod
-    def from_dsn(cls, dsn: str, **kwargs: Any) -> EquiblesFundamentals:
-        """Connect with psycopg (``pip install 'trading-pipeline[equibles]'``). Read-only use."""
+    def from_dsn(cls, dsn: str, **kwargs: Any) -> EquiblesPostgresFundamentals:
+        """Connect with psycopg (``pip install 'trading-pipeline[equibles-postgres]'``). Read-only use."""
         import psycopg
         from psycopg.rows import dict_row
 
@@ -178,5 +189,156 @@ class EquiblesFundamentals:
                 "basis": "SEC XBRL, latest value filed before this date (point-in-time); "
                          "revisions > 1 means restated or re-reported before this date",
                 "facts": point_in_time(rows),
+            },
+        )
+
+
+# --------------------------------------------------------------------------------------
+# Hosted MCP
+# --------------------------------------------------------------------------------------
+
+EQUIBLES_MCP_URL = "https://mcp.equibles.com/mcp"
+FACT_TOOL = "GetFinancialFact"
+
+# Equibles concept aliases (FinancialStatementConcepts in the Equibles source).
+DEFAULT_ALIASES: tuple[str, ...] = (
+    "revenue",
+    "gross-profit",
+    "operating-income",
+    "net-income",
+    "eps-diluted",
+    "research-and-development",
+    "operating-cash-flow",
+    "capital-expenditures",
+    "cash",
+    "total-assets",
+    "total-liabilities",
+    "long-term-debt",
+    "stockholders-equity",
+    "weighted-average-shares-diluted",
+)
+
+# Emitted by Equibles when per-share values were restated to today's share basis,
+# which in a backtest would reveal splits that happen after as_of.
+_SPLIT_NOTE = "Per-share values are split-adjusted to today's share basis"
+_HEADER = "| Period Start | Period End | FY | Period | Value | Unit | Form | Filed | Accession |"
+_CELL_SPLIT = re.compile(r"(?<!\\)\|")
+_TITLE = re.compile(r"^\S+ for \S+ \((?P<name>.*)\) — ", re.MULTILINE)
+
+
+def _cells(line: str) -> list[str]:
+    inner = line.strip()[1:-1]
+    return [c.strip().replace("\\|", "|").replace("\\\\", "\\") for c in _CELL_SPLIT.split(inner)]
+
+
+def _number(text: str) -> Decimal:
+    t = text.replace("(as filed)", "").strip()
+    neg = t.startswith("-")
+    t = t.lstrip("-").lstrip("$").replace(",", "")
+    value = Decimal(t)
+    return -value if neg else value
+
+
+def parse_fact_table(text: str, alias: str) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    """Parse a GetFinancialFact markdown answer into filing rows plus metadata."""
+    meta: dict[str, Any] = {"split_adjusted": _SPLIT_NOTE in text, "company": None}
+    if m := _TITLE.search(text):
+        meta["company"] = m.group("name")
+    lines = text.splitlines()
+    try:
+        start = next(i for i, l in enumerate(lines) if l.strip() == _HEADER) + 2
+    except StopIteration:
+        meta["message"] = text.strip()[:300]
+        return [], meta
+
+    rows = []
+    for line in lines[start:]:
+        if not line.strip().startswith("|"):
+            break
+        c = _cells(line)
+        if len(c) != 9:
+            continue
+        rows.append({
+            "taxonomy": None, "tag": alias, "label": alias, "unit": c[5], "period_type": None,
+            "period_start": date.fromisoformat(c[0]), "period_end": date.fromisoformat(c[1]),
+            "fiscal_year": int(c[2]), "fiscal_period": c[3], "form": c[6],
+            "filed": date.fromisoformat(c[7]), "accession": c[8], "value": _number(c[4]),
+            "as_filed": "(as filed)" in c[4],
+        })
+    return rows, meta
+
+
+def _per_share(unit: str) -> bool:
+    parts = unit.split("/")
+    return len(parts) == 2 and parts[1].strip().lower() in ("shares", "share")
+
+
+class EquiblesFundamentals:
+    """Point-in-time SEC fundamentals from the hosted Equibles MCP server.
+
+    ``mcp`` is any McpToolCaller, e.g. ``HttpMcpClient(EQUIBLES_MCP_URL,
+    allowed_tools={FACT_TOOL}, headers={"Authorization": f"Bearer {key}"})``.
+
+    Budget: one call per concept, two with ``include_restatements`` (the default).
+    With the 14 default concepts that is 28 calls per ticker, so the Free plan
+    (100 calls/day) only suits development; real runs need Plus (10,000/day).
+    """
+
+    def __init__(self, mcp: McpToolCaller, *, aliases: Sequence[str] = DEFAULT_ALIASES,
+                 lookback_years: int = 3, include_restatements: bool = True, max_parallel: int = 4,
+                 now: Callable[[], datetime] = lambda: datetime.now(timezone.utc)) -> None:
+        self._mcp = mcp
+        self._aliases = list(aliases)
+        self._lookback = timedelta(days=365 * lookback_years)
+        self._include_restatements = include_restatements
+        self._sem = asyncio.Semaphore(max_parallel)
+        self._now = now
+
+    async def _fetch(self, ticker: str, alias: str, original: bool, since: date, until: date):
+        args = {"ticker": ticker, "concept": alias, "fromDate": since.isoformat(),
+                "toDate": until.isoformat(), "maxResults": 40, "asOriginallyReported": original}
+        async with self._sem:
+            text = await self._mcp.call_tool(FACT_TOOL, args)
+        return parse_fact_table(text, alias)
+
+    async def fundamentals(self, ticker: str, as_of: datetime) -> DataSnapshot:
+        cutoff = visible_before(as_of)
+        since = cutoff - self._lookback
+        # Per-share values come back adjusted for splits up to today; in a backtest that
+        # leaks splits after as_of, so they are dropped unless the run is live.
+        backtest = as_of < self._now() - timedelta(days=1)
+        modes = [True, False] if self._include_restatements else [True]
+
+        jobs = [(alias, mode) for alias in self._aliases for mode in modes]
+        results = await asyncio.gather(*(self._fetch(ticker, a, m, since, cutoff) for a, m in jobs))
+
+        rows: list[dict[str, Any]] = []
+        notes: list[str] = []
+        company = None
+        for (alias, _), (parsed, meta) in zip(jobs, results):
+            company = company or meta["company"]
+            if "message" in meta and meta["message"] not in notes:
+                notes.append(meta["message"])
+            for r in parsed:
+                if r["filed"] >= cutoff:
+                    continue
+                if backtest and meta["split_adjusted"] and _per_share(r["unit"]) and not r["as_filed"]:
+                    note = f"{alias}: per-share values omitted (split-adjusted to today's basis)."
+                    if note not in notes:
+                        notes.append(note)
+                    continue
+                rows.append(r)
+
+        if not rows and company is None:
+            return DataSnapshot(kind="fundamentals", source="equibles", subject=ticker, as_of=as_of,
+                                is_gap=True, note="; ".join(notes) or f"No Equibles data for {ticker}.")
+        return DataSnapshot(
+            kind="fundamentals", source="equibles", subject=ticker, as_of=as_of,
+            payload={
+                "company": company,
+                "basis": "SEC XBRL via Equibles, latest value filed before this date (point-in-time); "
+                         "revisions > 1 means restated or re-reported before this date",
+                "facts": point_in_time(rows),
+                "notes": notes,
             },
         )

@@ -9,8 +9,9 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-equibles = ["psycopg[binary]>=3.1"]
-dev = ["pytest>=8", "pytest-asyncio>=0.23", "psycopg[binary]>=3.1"]
+equibles = ["mcp>=2.2"]
+equibles-postgres = ["psycopg[binary]>=3.1"]
+dev = ["pytest>=8", "pytest-asyncio>=0.23", "psycopg[binary]>=3.1", "mcp>=2.2"]
 
 [build-system]
 requires = ["setuptools>=68"]

@@ -12,7 +12,7 @@ from decimal import Decimal
 
 import pytest
 
-from trading_pipeline.data.equibles import EquiblesFundamentals, point_in_time, visible_before
+from trading_pipeline.data.equibles import EquiblesPostgresFundamentals, point_in_time, visible_before
 
 
 def row(value, filed, accession, *, tag="NetIncomeLoss", end=date(2025, 12, 31), fp=0):
@@ -110,7 +110,7 @@ def adapter(schema):
                 await cur.execute(sql, params)
                 return await cur.fetchall()
 
-    return EquiblesFundamentals(query)
+    return EquiblesPostgresFundamentals(query)
 
 
 def at(y, m, d):  # 17:00 New York time

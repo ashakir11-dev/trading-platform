@@ -19,7 +19,7 @@ src/trading_pipeline/
   store.py             SQLite: reasoning logs, snapshots, positions, reviews, isolated user decisions
   data/base.py         provider protocols, point-in-time RawDataBundle
   data/mcp.py          skeleton adapters for candidate vendors (Massive, read-only Robinhood)
-  data/equibles.py     point-in-time SEC fundamentals from self-hosted Equibles (Postgres)
+  data/equibles.py     point-in-time SEC fundamentals from Equibles (hosted MCP; or self-hosted Postgres)
   data/gaps.py         explicit placeholders for the open data gaps
   agents/              one module per agent
 tests/                 scripted-LLM + fixture-data tests
