@@ -14,4 +14,7 @@ Run the pipeline end to end, live, as of now. Options: $ARGUMENTS
    subject = the sector as a slug, upstream = the market scanner's folder, task = the
    sector and its direction).
 5. Apply the forwarding rules to the shortlists.
-6. Write the report and show it.
+6. Launch one `company-deep-dive` per forwarded candidate, in parallel.
+7. Launch one `technical-analysis` per candidate that passed, in parallel.
+8. Run the recommendation check.
+9. Write the report and show it.

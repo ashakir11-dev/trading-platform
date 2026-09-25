@@ -20,6 +20,10 @@ As of <as_of> · prompt <prompt_commit> · profile <name> · options <...>
 | # | Ticker | Company | Score | Passed | Forwarded | One-line case |
 |---|---|---|---|---|---|---|
 
+## Candidates
+| Candidate | Company deep dive | Catalysts (verified / unverified / contradicted) | Technical | Why, in one line |
+|---|---|---|---|---|
+
 ## Recommendations
 <candidate_id, ticker, direction, entry / stop / target, horizon, rule flags>
 <"None: ..." with the reason when empty>

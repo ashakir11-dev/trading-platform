@@ -73,9 +73,29 @@ agent reported) and carry on with the others. Never write an agent's output your
 3. Each advancing company becomes a candidate: `candidate_id` = `<run_id>-<TICKER>`.
    List it under "Forwarded".
 
-**Company deep dive and technical analysis are not built yet.** Stop after the sector
-deep dives: the forwarded candidates are the run's result, and "Recommendations" stays
-empty. (Remove this paragraph when those stages exist.)
+**Company deep dive:** launch one `company-deep-dive` per forwarded candidate, in
+parallel. Subject: the ticker. Upstream: the market scanner's folder and the sector
+deep dive's folder. Task: `Candidate <candidate_id>: <TICKER>, <long|short>.`
+A `verdict: reject` stops the candidate; record it under "Not pursued" with the thesis
+in one line.
+
+**Technical analysis:** launch one `technical-analysis` per candidate that passed, in
+parallel. Subject: the ticker. Upstream: the company deep dive's folder. Profile: the
+run's `profile.json`. Task: `Candidate <candidate_id>: <TICKER>, <long|short>.`
+
+**Recommendation check.** Read the technical frontmatter. The candidate is recommended
+only if `verdict: pass`, a `plan` is present and no rule has `outcome: reject`. Before
+listing it, recompute from the plan's numbers and the profile:
+
+- price order: long s < e < t, short t < e < s;
+- max loss: |e − s| / e × 100 ≤ `max_loss_per_trade_pct`;
+- reward:risk: |t − e| / |e − s| ≥ `min_reward_to_risk`.
+
+If your numbers disagree with the agent's rule results, do not recommend: record the
+candidate under "Not pursued" as `rule check mismatch: <rule>, agent <x>, recomputed <y>`.
+Otherwise list it under "Recommendations" with entry / stop / target / horizon and
+every `flag`. Rejected candidates go under "Not pursued" with the failing rule or the
+agent's reason.
 
 ## Finishing
 
