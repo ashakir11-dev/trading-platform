@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Multi-Agent Trading Pipeline — Architecture Summary</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/mermaid/10.9.1/mermaid.min.js"></script>
+<style>
+  :root {
+    --bg: #ffffff;
+    --fg: #1a1a1a;
+    --muted: #5b5b5b;
+    --accent: #2563eb;
+    --card-bg: #f7f8fa;
+    --border: #e2e4e8;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #14161a;
+      --fg: #e8e9eb;
+      --muted: #a3a6ad;
+      --accent: #6ea8fe;
+      --card-bg: #1d2025;
+      --border: #2a2d33;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    line-height: 1.55;
+  }
+  .wrap {
+    max-width: 880px;
+    margin: 0 auto;
+    padding: 40px 24px 80px;
+  }
+  h1 {
+    font-size: 1.7rem;
+    margin-bottom: 4px;
+  }
+  .subtitle {
+    color: var(--muted);
+    margin-top: 0;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+  }
+  h2 {
+    font-size: 1.2rem;
+    margin-top: 44px;
+    margin-bottom: 14px;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 8px;
+  }
+  h3 {
+    font-size: 1.02rem;
+    margin-top: 24px;
+    margin-bottom: 6px;
+    color: var(--accent);
+  }
+  p, li { font-size: 0.96rem; }
+  ul { padding-left: 22px; }
+  li { margin-bottom: 6px; }
+  .card {
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 18px 20px;
+    margin: 16px 0;
+    overflow-x: auto;
+  }
+  .diagram-container {
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 20px;
+    margin: 16px 0;
+    overflow-x: auto;
+  }
+  .note {
+    font-size: 0.85rem;
+    color: var(--muted);
+    font-style: italic;
+    margin-top: 6px;
+  }
+  code {
+    background: var(--card-bg);
+    padding: 1px 5px;
+    border-radius: 4px;
+    font-size: 0.9em;
+  }
+  .open {
+    border-left: 3px solid var(--accent);
+    padding-left: 12px;
+    margin: 10px 0;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1>Multi-Agent Trading Pipeline</h1>
+  <p class="subtitle">Architecture summary — sequential pipeline extension to the dual-MCP stock agent (Massive.com + Robinhood)</p>
+
+  <h2>1. Overview</h2>
+  <p>
+    A pipeline of independent agents, each handling one stage of trade research, feeding forward
+    into the next stage. Agents within a stage run in parallel and independently per candidate,
+    to avoid correlated bias. Every agent outputs structured reasoning alongside its verdict,
+    not just a pass/fail, so a retrospective feedback loop can trace where judgment broke down.
+  </p>
+
+  <h2>2. Architecture Diagram</h2>
+  <div class="diagram-container">
+    <pre class="mermaid">
+flowchart TD
+    A0["Agent 0<br/>Market Scanner<br/><i>scans overall market → outputs sectors with upside/downside potential</i>"]
+    A1["Agent 1<br/>Sector Deep Dive<br/><i>per sector → shortlist of ~10-30 companies via fundamentals, news, FDA, earnings</i>"]
+    A2["Company Deep Dive<br/><i>per company → evaluates worthiness, scrutinizes stated catalysts</i>"]
+    A3["Technical Analysis Agent<br/><i>per company, parallel → chart viability, entry/exit/stop-loss, can reject</i>"]
+    MW["Middleware<br/><i>reports results to user; user makes the real go/no-go call</i>"]
+    A5["Agent 5<br/>Follow-Up Loop<br/><i>scheduled: lightweight tripwires + periodic full re-review</i>"]
+    OUT["Outcomes Agent<br/><i>tracks real financial results, no judgment</i>"]
+    PROC["Process Agent<br/><i>judges reasoning quality per stage, incl. foreseeable risk</i>"]
+
+    A0 -->|sectors| A1
+    A1 -->|ranked/filtered shortlist + raw data| A2
+    A2 -->|surviving candidates + raw data| A3
+    A3 -->|surviving picks| MW
+    MW -->|accepted positions| A5
+    A5 -.feedback.-> OUT
+    A5 -.feedback.-> PROC
+    A0 -.reasoning log.-> PROC
+    A1 -.reasoning log.-> PROC
+    A2 -.reasoning log.-> PROC
+    A3 -.reasoning log.-> PROC
+    OUT -.improve.-> A0
+    PROC -.improve.-> A0
+
+    classDef stage fill:#2563eb22,stroke:#2563eb,stroke-width:1px;
+    class A0,A1,A2,A3,A5 stage;
+    </pre>
+  </div>
+  <p class="note">Dashed lines represent feedback/logging relationships rather than the primary data flow.</p>
+
+  <h2>3. Sequence Diagram (single run)</h2>
+  <div class="diagram-container">
+    <pre class="mermaid">
+sequenceDiagram
+    participant U as User (Abdullah)
+    participant MW as Middleware
+    participant A0 as Agent 0 (Market)
+    participant A1 as Agent 1 (Sector)
+    participant A2 as Company Deep Dive
+    participant A3 as Technical Agent
+    participant A5 as Agent 5 (Follow-up)
+    participant OUT as Outcomes Agent
+    participant PROC as Process Agent
+
+    A0->>A0: Scan market, identify sectors
+    A0->>A1: Sectors + raw market data
+    par per sector
+        A1->>A1: Deep dive sector, shortlist companies
+    end
+    A1->>A2: Shortlist + raw sector data
+    par per company
+        A2->>A2: Evaluate worthiness, verify catalyst
+    end
+    A2->>A3: Surviving companies + raw company data
+    par per company (independent)
+        A3->>A3: Chart analysis, entry/exit/stop-loss
+        A3-->>A3: Reject if no clean setup
+    end
+    A3->>MW: Surviving picks + full reasoning trail
+    MW->>U: Present analysis & recommendation
+    U-->>U: Manual accept/reject (no feedback into system)
+    U->>A5: Accepted position enters watch list
+    loop scheduled
+        A5->>A5: Lightweight tripwire check (fundamental + technical)
+        alt full re-review interval reached
+            A5->>A5: Deep full re-review
+        end
+    end
+    A5->>OUT: Outcome data
+    A5->>PROC: Reasoning trail for review
+    OUT->>PROC: Financial results
+    PROC->>A0: Improvement signal (process quality, missed risks)
+    </pre>
+  </div>
+
+  <h2>4. Key Design Principles</h2>
+  <div class="card">
+    <ul>
+      <li>Sequential between stages, parallel and independent within a stage — each candidate gets its own unbiased pass, with no cross-comparison at the technical stage.</li>
+      <li>Each agent receives the prior agent's report <strong>and</strong> the raw data behind it, so a bad upstream filter doesn't fully blind the next stage.</li>
+      <li>Fundamental worthiness and technical tradeability are uncorrelated filters — rejecting a fundamentally strong company on chart grounds is a normal outcome, not an error.</li>
+      <li>Every agent logs structured reasoning (what pushed it toward/away from its conclusion), not just a verdict — this is the backbone of the feedback loop.</li>
+      <li>The middleware (formerly "orchestrator") is one-directional: it reports pipeline output to the user, but the user's manual accept/reject never feeds back into the system as if it were the system's own judgment. This keeps user bias out of the self-improvement loop.</li>
+      <li>Meta-review is split into two decoupled agents — an <strong>outcomes agent</strong> (pure financial results, no judgment) and a <strong>process agent</strong> (reasoning quality, including whether foreseeable risks like macro exposure were accounted for) — so a well-reasoned trade that loses to a genuine black swan isn't penalized the same as a missed, foreseeable risk.</li>
+      <li>Targeting swing / long-term horizons, not day trading — this makes cross-stage data staleness a non-issue.</li>
+    </ul>
+  </div>
+
+  <h2>5. Open Decisions</h2>
+  <div class="open">
+    <strong>Agent 1 output format:</strong> ranked list with potential scores (gives the feedback loop gradient signal, lets downstream agents triage) vs. a simple black-and-white pass/fail list. Not yet decided.
+  </div>
+  <div class="open">
+    <strong>Running confidence score:</strong> considering a score that travels with each candidate through the whole pipeline (rather than a fresh yes/no per stage), so its trajectory across stages helps trace which agent introduced doubt — aiding attribution when a trade fails for reasons that aren't a single clean-cut agent error.
+  </div>
+
+  <h2>6. Data Requirements</h2>
+  <div class="card">
+    <p>Every category below needs both a <strong>live/current</strong> version (to run the system) and a <strong>deep historical</strong> version (to back test it honestly):</p>
+    <ul>
+      <li>Price and volume data</li>
+      <li>Sector-level performance / breadth</li>
+      <li>News and catalyst events (earnings, FDA approvals, analyst actions)</li>
+      <li>Company fundamentals (financials, filings, ownership, valuation)</li>
+    </ul>
+    <h3>Already covered</h3>
+    <ul>
+      <li>Massive.com MCP — historical OHLCV, technical indicators, pivot support/resistance (feeds the Technical Analysis Agent)</li>
+      <li>Robinhood MCP — live quotes, account data, positions (feeds the Middleware's visibility layer)</li>
+    </ul>
+    <h3>Open gaps</h3>
+    <ul>
+      <li>Live and historical sector-level screening / breadth data</li>
+      <li>A historical news and catalyst archive tied to specific dates — flagged as the hardest to source and the most important for honestly back testing Agent 1's catalyst-based picks</li>
+    </ul>
+  </div>
+
+  <h2>7. Overall Assessment</h2>
+  <div class="card">
+    <p><strong>Architecture:</strong> mature and well-reasoned — decoupled independent stages, raw-data pass-through, structured reasoning logs, and a hard separation between system analysis and human decision-making.</p>
+    <p><strong>Will it make money:</strong> unclear and shouldn't be assumed — a good pipeline architecture doesn't guarantee good market calls. The value of this design is that it's honest and falsifiable: back testing and the process agent will surface whether the underlying judgment is actually good, rather than letting bad calls hide.</p>
+    <p><strong>Overfitting risk:</strong> back testing/tuning against historical data too tightly risks the system memorizing the past rather than reasoning about the future. Mitigate with a held-out validation period the system was never tuned against, and lean on the process agent (reasoning quality, not just outcome) as a check against optimizing toward the wrong signal.</p>
+    <p><strong>Technical complexity:</strong> manageable — this is agent orchestration with distinct prompts and data access per stage, not novel ML. A working first version is realistic in weeks; tuning it to be reliably good will take many iterations of back testing and refinement.</p>
+    <p><strong>Verdict:</strong> worth building as a rigorous research/learning project. Expect early versions to be mediocre or lose money — that's the system doing its job by surfacing weak reasoning, not a failure of the architecture.</p>
+  </div>
+
+</div>
+<script>
+  mermaid.initialize({
+    startOnLoad: true,
+    theme: window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'default',
+    securityLevel: 'loose'
+  });
+</script>
+</body>
+</html>
