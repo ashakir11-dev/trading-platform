@@ -35,8 +35,8 @@ from __future__ import annotations
 import asyncio
 import re
 import statistics
-from collections.abc import Sequence
-from datetime import date, datetime, time, timedelta
+from collections.abc import Callable, Sequence
+from datetime import date, datetime, time, timedelta, timezone
 from typing import Any
 
 from .base import DataSnapshot
@@ -46,6 +46,10 @@ from .mcp import McpToolCaller
 
 LIST_FILINGS = "ListFilings"
 FDA_MEETINGS = "GetFdaAdvisoryCommitteeMeetings"
+# Equibles Cloud tools (formats verified against the hosted server; fixtures in
+# tests/fixtures/equibles_live).
+IR_EVENTS = "GetUpcomingInvestorEvents"
+IR_NEWS = "GetInvestorRelationsNews"
 SOURCE = "equibles"
 
 # SEC Form 8-K item titles (short forms).
@@ -346,6 +350,33 @@ class EquiblesFilings:
 # --------------------------------------------------------------------------------------
 
 
+_IR_EVENT = re.compile(r"^- (?P<date>\d{4}-\d{2}-\d{2})(?: (?P<time>\d{2}:\d{2}) UTC)? \[(?P<type>[^\]]+)\]: (?P<title>.+)$")
+_IR_NEWS = re.compile(r"^- (?P<date>\d{4}-\d{2}-\d{2}): (?P<headline>.+)$")
+
+
+def _bullets(text: str, pattern: re.Pattern) -> list[dict[str, Any]]:
+    """Parse Equibles' bullet-list answers: '- <fields>' lines, each optionally followed by an
+    indented URL line."""
+    out: list[dict[str, Any]] = []
+    for line in (text or "").splitlines():
+        m = pattern.match(line.strip()) if line.startswith("- ") else None
+        if m:
+            out.append({**m.groupdict(), "url": None})
+        elif out and line.startswith("  ") and line.strip().startswith("http"):
+            out[-1]["url"] = line.strip()
+    return out
+
+
+def parse_upcoming_events(text: str) -> list[dict[str, Any]]:
+    """GetUpcomingInvestorEvents -> [{date, time, type, title, url}] (soonest first)."""
+    return _bullets(text, _IR_EVENT)
+
+
+def parse_ir_news(text: str) -> list[dict[str, Any]]:
+    """GetInvestorRelationsNews -> [{date, headline, url}] (newest first)."""
+    return _bullets(text, _IR_NEWS)
+
+
 class EquiblesNews:
     """``NewsCatalystProvider`` built from 8-K filings and the FDA advisory calendar.
 
@@ -361,11 +392,16 @@ class EquiblesNews:
     earnings 1. A subject is treated as a ticker when it looks like one (``AAPL``, ``BRK.B``).
     """
 
-    TOOLS: frozenset[str] = frozenset({LIST_FILINGS, FDA_MEETINGS})
+    TOOLS: frozenset[str] = frozenset({LIST_FILINGS, FDA_MEETINGS, IR_EVENTS, IR_NEWS})
 
     def __init__(self, mcp: McpToolCaller, *, fda_notice_days: int = 15, match_fda_to_tickers: bool = True,
-                 earnings_lookback_days: int = 800, max_8ks: int = 100) -> None:
+                 earnings_lookback_days: int = 800, max_8ks: int = 100, ir_news: bool = True,
+                 max_ir_news: int = 50,
+                 now: Callable[[], datetime] = lambda: datetime.now(timezone.utc)) -> None:
         self._mcp = mcp
+        self._ir_news = ir_news
+        self._max_ir_news = max_ir_news
+        self._now = now
         self._notice = timedelta(days=fda_notice_days)
         self._match_fda = match_fda_to_tickers
         self._earnings_lookback = timedelta(days=earnings_lookback_days)
@@ -386,8 +422,11 @@ class EquiblesNews:
         filing_jobs = [_list_filings(self._mcp, ticker, start, cutoff - timedelta(days=1), document_type=f,
                                      max_items=self._max_8ks) for f in ("8-K", "8-K/A")]
         fda_job = self._fda_window(since, as_of) if self._match_fda else None
-        results = await asyncio.gather(*filing_jobs, *([fda_job] if fda_job else []))
+        news_job = self._press_releases(ticker, start, since, as_of) if self._ir_news else None
+        results = await asyncio.gather(*filing_jobs, *([fda_job] if fda_job else []),
+                                       *([news_job] if news_job else []))
         filing_results = results[:2]
+        press, press_note = results[-1] if news_job else ([], None)
 
         statuses = {meta["status"] for _, meta in filing_results}
         if statuses <= {"not_found", "unparsed"}:
@@ -421,11 +460,39 @@ class EquiblesNews:
                      "(best effort; the FDA calendar does not name tickers). " + self._fda_caveat())
             if fda_note and not fda_note.startswith("No FDA"):
                 notes.append(fda_note)
+        if news_job:
+            events += press
+            note += (" Company press releases from its investor-relations site; ts = start of the "
+                     "US/Eastern day after the published date (items carry a date, not a time).")
+            if press_note:
+                notes.append(press_note)
         events.sort(key=lambda e: e["ts"], reverse=True)
         if notes:
             note += " " + " ".join(notes)
         return DataSnapshot(kind="news_catalysts", source=SOURCE, subject=ticker, as_of=as_of,
                             payload=events, note=note)
+
+    async def _press_releases(self, ticker: str, start: date, since: datetime,
+                              as_of: datetime) -> tuple[list[dict[str, Any]], str | None]:
+        """Company IR press releases published in the window, as event dicts."""
+        try:
+            text = await self._mcp.call_tool(IR_NEWS, {"ticker": ticker, "since": start.isoformat(),
+                                                      "maxResults": self._max_ir_news})
+        except Exception as e:
+            return [], f"{IR_NEWS} failed: {e}"
+        items = parse_ir_news(str(text))
+        if not items:
+            # Equibles distinguishes coverage gaps from silence in plain text; pass it on.
+            return [], f"Press releases: {str(text).strip().splitlines()[0][:200]}" if str(text).strip() else None
+        out = []
+        for it in items:
+            published = date.fromisoformat(it["date"])
+            ts = known_from(published)
+            if since < ts <= as_of:
+                out.append({"ts": ts.isoformat(), "published": it["date"], "headline": it["headline"],
+                            "category": None, "source": "company investor relations via Equibles",
+                            "url": it["url"]})
+        return out, None
 
     async def _sector_events(self, sector: str, since: datetime, as_of: datetime) -> DataSnapshot:
         if not is_healthcare_sector(sector):
@@ -479,6 +546,32 @@ class EquiblesNews:
     # -- earnings ------------------------------------------------------------------
 
     async def upcoming_earnings(self, ticker: str, as_of: datetime) -> DataSnapshot:
+        estimate = await self._estimated_earnings(ticker, as_of)
+        # The company's IR calendar only lists events after *today*, so it can answer for a
+        # live run but not for a past as_of (it can't say what was announced back then).
+        if as_of < self._now() - timedelta(days=1):
+            return estimate
+        try:
+            text = await self._mcp.call_tool(IR_EVENTS, {"ticker": ticker, "eventType": "EarningsCall",
+                                                        "maxResults": 5})
+        except Exception:
+            return estimate
+        today = visible_before(as_of)
+        calls = [e for e in parse_upcoming_events(str(text)) if date.fromisoformat(e["date"]) >= today]
+        if not calls:
+            return estimate
+        nxt = calls[0]
+        payload: dict[str, Any] = {
+            "next_earnings_date": nxt["date"], "confirmed": True,
+            "basis": "company investor-relations calendar (announced)",
+            "event": nxt["title"], "time_utc": nxt["time"], "url": nxt["url"],
+        }
+        if not estimate.is_gap:
+            payload["estimate_from_8k_cadence"] = estimate.payload["next_earnings_date"]
+        return DataSnapshot(kind="earnings_calendar", source=SOURCE, subject=ticker, as_of=as_of, payload=payload,
+                            note="Announced by the company; live runs only (the IR calendar lists future events only).")
+
+    async def _estimated_earnings(self, ticker: str, as_of: datetime) -> DataSnapshot:
         cutoff = visible_before(as_of)
         start = cutoff - self._earnings_lookback
         parsed, meta = await _list_filings(self._mcp, ticker, start, cutoff - timedelta(days=1),
@@ -498,7 +591,8 @@ class EquiblesNews:
                      "basis": "estimated from past 8-K 2.02 cadence", "method": method,
                      "last_results_filed": filed[-1].isoformat(),
                      "past_results_filed": [d.isoformat() for d in filed[-8:]]},
-            note="Estimate, not a confirmed date: Equibles has no earnings calendar in its open-source tools.")
+            note="Estimate, not a confirmed date. Backtests and companies without an announced date "
+                 "use this estimate; live runs prefer the company's announced date.")
 
 
 def estimate_next_earnings(filed: Sequence[date], today: date) -> tuple[date, str] | None:

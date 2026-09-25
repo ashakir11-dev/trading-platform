@@ -1,6 +1,7 @@
 """Equibles prices/quotes adapters against a fake MCP emitting Equibles' exact text formats."""
 
 from datetime import date, datetime, timedelta, timezone
+from pathlib import Path
 from zoneinfo import ZoneInfo
 
 import pytest
@@ -76,6 +77,8 @@ class FakeEquiblesPrices:
         self.calls.append((name, arguments))
         if name == LATEST_CLOSE_TOOL:
             return self.latest(arguments["tickers"])
+        if name == "GetLiveQuote":  # the real hosted answer on the Free plan
+            return (Path(__file__).parent / "fixtures" / "equibles_live" / "GetLiveQuote.free_plan.md").read_text()
         if arguments["ticker"] != "ACME":
             return f"Stock '{arguments['ticker']}' not found."
         start = date.fromisoformat(arguments["startDate"])
@@ -289,7 +292,8 @@ async def test_quote_is_last_close_not_live():
     fake = FakeEquiblesPrices(DAYS)
     q = EquiblesQuotes(fake, now=lambda: NOW)
     snap = await q.quote("ACME")
-    assert fake.calls == [(LATEST_CLOSE_TOOL, {"tickers": ["ACME"]})]
+    assert fake.calls == [("GetLiveQuote", {"tickers": ["ACME"]}), (LATEST_CLOSE_TOOL, {"tickers": ["ACME"]})]
+    assert "not included in this plan" in snap.payload["why_not_live"]
     assert snap.kind == "quote" and not snap.is_gap
     assert snap.payload["price"] == round(fake.series[date(2026, 9, 25)][3], 2)
     assert snap.payload["as_of_date"] == "2026-09-25" and snap.payload["basis"] == "last close (EOD), not live"
@@ -304,7 +308,7 @@ async def test_positions_is_a_gap_and_no_order_methods():
     assert snap.is_gap and snap.kind == "positions"
     public = {n for n in dir(q) if not n.startswith("_")}
     assert public == {"TOOLS", "quote", "positions"}
-    assert EquiblesQuotes.TOOLS == {LATEST_CLOSE_TOOL} and EquiblesPrices.TOOLS == {PRICES_TOOL}
+    assert EquiblesQuotes.TOOLS == {"GetLiveQuote", LATEST_CLOSE_TOOL} and EquiblesPrices.TOOLS == {PRICES_TOOL}
 
 
 def test_as_of_must_be_timezone_aware():
@@ -318,3 +322,12 @@ def test_utc_as_of_is_handled():
     as_of = datetime(2026, 3, 11, 19, 59, tzinfo=timezone.utc)  # 15:59 ET (EDT from Mar 8)
     bars = asyncio.run(prices(FakeEquiblesPrices(DAYS, leak_future=True)).bars("ACME", date(2026, 3, 1), as_of))
     assert bars[-1].ts.astimezone(ET).date() == date(2026, 3, 10)
+
+
+
+def test_parse_live_quotes_requires_a_quote_table():
+    from trading_pipeline.data.equibles_prices import parse_live_quotes
+
+    free = (Path(__file__).parent / "fixtures" / "equibles_live" / "GetLiveQuote.free_plan.md").read_text()
+    assert parse_live_quotes(free) == {}
+    assert parse_live_quotes("| Name | Value |\n|---|---|\n| a | 1 |\n") == {}

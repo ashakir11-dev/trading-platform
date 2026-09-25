@@ -51,7 +51,27 @@ installed. A data category whose adapter module is not installed yet falls back 
 its gap placeholder: the run still works, the CLI logs a warning, and agents see that
 data marked `UNAVAILABLE`.
 
-## 3. Daily run (after the close)
+## 3. Pre-flight check
+
+```sh
+trading-pipeline check                       # AAPL and Health Care by default
+trading-pipeline check --ticker NVDA --sector Technology
+```
+
+Calls every data source once (roughly 100 Equibles calls, no LLM: that is the whole
+daily allowance of the Free plan, so use Plus) and prints OK / WARN / FAIL per data type. It exits 1 on any FAIL, because a run would otherwise hand the agents
+missing data. WARN is expected for the quote on the Free plan (last close, not live).
+
+For a first run, keep it small and read the output closely:
+
+```sh
+trading-pipeline run --max-sectors 1 --shortlist 3
+```
+
+`--max-sectors N` pursues only the N highest-confidence sectors from Agent 0 (the others
+are listed as not pursued); `--shortlist N` forwards at most N companies per sector.
+
+## 4. Daily run (after the close)
 
 ```sh
 trading-pipeline run                       # as of now; uses live quotes
@@ -66,7 +86,7 @@ day's close. A past date always runs as a backtest (live quotes are not point-in
 and `--backtest` forces that for today too. The report is saved; its header shows the
 run id, and each recommendation shows its `candidate_id`.
 
-## 4. Workflow: decide → follow-up → close → review → approve
+## 5. Workflow: decide → follow-up → close → review → approve
 
 ```sh
 trading-pipeline decide CANDIDATE_ID accept --note "half size"   # or: reject
@@ -95,7 +115,7 @@ trading-pipeline approve-note NOTE_ID
 5. **Approve** only the notes you agree with. Only approved notes are added to future
    prompts of the stage they target.
 
-## 5. Scheduling (cron)
+## 6. Scheduling (cron)
 
 Cron runs with a minimal environment, so each line sources the env file and uses absolute paths.
 Times below are in New York time via `CRON_TZ` (supported by cronie; with other crons,
@@ -116,7 +136,7 @@ CRON_TZ=America/New_York
 mail) only sends alerts, re-reviews and needed actions. Market holidays are not skipped;
 a tick on a holiday just finds no new data.
 
-## 6. Where data is stored
+## 7. Where data is stored
 
 Everything lives in one SQLite file (`TRADING_DB`, default
 `~/.trading-platform/pipeline.sqlite3`):

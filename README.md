@@ -130,6 +130,8 @@ Other settings (database path, model and effort overrides) are in
 ### Using it
 
 ```bash
+trading-pipeline check                            # pre-flight: every data source, no LLM
+trading-pipeline run --max-sectors 1 --shortlist 3  # a small first run
 trading-pipeline run                              # after the close; prints the report
 trading-pipeline decide CANDIDATE_ID accept       # or reject, with --note
 trading-pipeline positions
@@ -158,12 +160,16 @@ doesn't provide is deferred. Agents depend only on the provider interfaces in
 |---|---|
 | Company fundamentals (point-in-time by filing date) | Built |
 | Daily/weekly prices, indicators, support/resistance | Built (computed locally from Equibles prices) |
-| Sector performance, sector screen and breadth | Built (sector ETFs and their filed holdings) |
-| SEC filings, 8-K catalyst events, FDA advisory meetings | Built |
+| Quotes | Built: live on Equibles Plus/Pro, last close otherwise |
+| Sector performance, sector screen and breadth | Built (sector ETFs and their holdings, with tickers) |
+| SEC filings, 8-K events, company press releases, FDA advisory meetings | Built |
+| Earnings date | Built: announced date on live runs, estimate from past filings otherwise |
 | Macro (FRED series, VIX, put/call, release calendar) | Built |
-| Earnings date | Built as an estimate from past results filings |
-| Live quotes, intraday bars, screener ratios, transcripts | Equibles Cloud tools; need their tool reference (quotes use the last close meanwhile) |
-| General news, analyst ratings, FDA decision dates | Deferred (not in Equibles) |
+| Screener ratios, guidance, analyst estimates, transcripts | Available in Equibles; not yet wired |
+| Third-party news, FDA decision dates | Deferred (not in Equibles) |
+
+All connectors are verified against real Equibles responses. Run
+`trading-pipeline check` before a run to confirm your account returns every data type.
 
 Details and backtest caveats are in
 [`docs/ARCHITECTURE.md` §6](docs/ARCHITECTURE.md#6-data-requirements).

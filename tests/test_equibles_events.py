@@ -1,7 +1,7 @@
 """Equibles filings / 8-K events / FDA meetings / earnings estimate, against a fake MCP
 server that answers in Equibles' exact output formats."""
 
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
 from trading_pipeline.data.equibles_events import (
@@ -53,6 +53,9 @@ MEETINGS = [
 ]
 
 
+FIX = __import__("pathlib").Path(__file__).parent / "fixtures" / "equibles_live"
+
+
 class FakeEquibles:
     def __init__(self, company="Acme Therapeutics, Inc."):
         self.company = company
@@ -61,6 +64,10 @@ class FakeEquibles:
     async def call_tool(self, name, args):
         self.calls.append((name, args))
         assert name in EquiblesNews.TOOLS | EquiblesFilings.TOOLS
+        if name == "GetInvestorRelationsNews":  # real hosted coverage-gap answer
+            return (FIX / "GetInvestorRelationsNews.gap.md").read_text()
+        if name == "GetUpcomingInvestorEvents":
+            return (FIX / "GetUpcomingInvestorEvents.none.md").read_text()
         return self.list_filings(**args) if name == LIST_FILINGS else self.fda(**args)
 
     def list_filings(self, ticker=None, page=1, maxItems=10, startDate=None, endDate=None,
@@ -261,5 +268,68 @@ def test_estimate_next_earnings_fallbacks():
 
 def test_tools_are_read_only_listing_tools():
     assert EquiblesFilings.TOOLS == frozenset({"ListFilings"})
-    assert EquiblesNews.TOOLS == frozenset({"ListFilings", "GetFdaAdvisoryCommitteeMeetings"})
+    assert EquiblesNews.TOOLS == frozenset({"ListFilings", "GetFdaAdvisoryCommitteeMeetings",
+                                            "GetUpcomingInvestorEvents", "GetInvestorRelationsNews"})
 
+
+
+
+# ------------------------------------------------------------------------------------
+# Equibles Cloud: IR earnings calendar and press releases (real hosted formats)
+# ------------------------------------------------------------------------------------
+
+from trading_pipeline.data.equibles_events import parse_ir_news, parse_upcoming_events  # noqa: E402
+
+
+def test_parse_ir_formats():
+    events = parse_upcoming_events((FIX / "GetUpcomingInvestorEvents.md").read_text())
+    assert [(e["date"], e["time"], e["type"]) for e in events] == [
+        ("2026-10-01", "18:00", "Earnings call"), ("2026-10-01", "21:00", "Earnings call")]
+    assert events[0]["url"].startswith("https://investors.nike.com/")
+    news = parse_ir_news((FIX / "GetInvestorRelationsNews.md").read_text())
+    assert len(news) == 3 and news[0]["date"] == "2026-09-14" and "CUDA-Q" in news[0]["headline"]
+    assert parse_upcoming_events((FIX / "GetUpcomingInvestorEvents.none.md").read_text()) == []
+    assert parse_ir_news((FIX / "GetInvestorRelationsNews.gap.md").read_text()) == []
+
+
+class CloudFake(FakeEquibles):
+    async def call_tool(self, name, args):
+        if name == "GetUpcomingInvestorEvents":
+            self.calls.append((name, args))
+            return (FIX / "GetUpcomingInvestorEvents.md").read_text()
+        if name == "GetInvestorRelationsNews":
+            self.calls.append((name, args))
+            return (FIX / "GetInvestorRelationsNews.md").read_text()
+        return await super().call_tool(name, args)
+
+
+async def test_live_run_prefers_announced_earnings_date():
+    live = datetime(2026, 9, 25, 21, tzinfo=timezone.utc)
+    news = EquiblesNews(CloudFake(), now=lambda: live)
+    snap = await news.upcoming_earnings("ACME", live)
+    assert snap.payload["confirmed"] is True and snap.payload["next_earnings_date"] == "2026-10-01"
+    assert "investor-relations" in snap.payload["basis"]
+
+
+async def test_backtest_never_uses_the_forward_only_ir_calendar():
+    live = datetime(2026, 9, 25, 21, tzinfo=timezone.utc)
+    fake = CloudFake()
+    snap = await EquiblesNews(fake, now=lambda: live).upcoming_earnings("ACME", live - timedelta(days=30))
+    assert not any(n == "GetUpcomingInvestorEvents" for n, _ in fake.calls)
+    assert snap.is_gap or snap.payload["confirmed"] is False
+
+
+async def test_press_releases_become_point_in_time_events():
+    as_of = datetime(2026, 9, 14, 21, tzinfo=timezone.utc)  # 09-14 release not known until 09-15
+    news = EquiblesNews(CloudFake(), now=lambda: as_of)
+    snap = await news.events("ACME", datetime(2026, 8, 1, tzinfo=timezone.utc), as_of)
+    press = [e for e in snap.payload if e["source"].startswith("company investor relations")]
+    assert [e["published"] for e in press] == ["2026-09-10", "2026-08-31"]
+    assert all(e["ts"] <= as_of.isoformat() for e in press) and press[0]["url"]
+
+
+async def test_press_release_coverage_gap_is_noted():
+    as_of = datetime(2026, 9, 25, 21, tzinfo=timezone.utc)
+    snap = await EquiblesNews(FakeEquibles(), now=lambda: as_of).events(
+        "ACME", datetime(2026, 1, 1, tzinfo=timezone.utc), as_of)
+    assert "coverage gap" in snap.note

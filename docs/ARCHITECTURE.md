@@ -207,19 +207,25 @@ in `data/base.py`, so this stays swappable.
 |---|---|---|---|
 | Company fundamentals | `GetFinancialFact` | **Built**: `data/equibles.py` `EquiblesFundamentals` | Point-in-time by filing date; see below |
 | Daily/weekly prices, indicators, support/resistance | `GetStockPrices` | **Built**: `data/equibles_prices.py` `EquiblesPrices`, math in `data/technicals.py` | Weekly bars and all indicators/pivots computed locally. A bar counts from 16:00 ET on its date. **Backtest caveat:** Equibles restates the whole history after each split and exposes no split events, so past absolute levels reflect later splits (percent moves and indicator shapes are unaffected). |
-| Quotes | `GetLatestClosingPrices` | **Built**: `EquiblesQuotes` | Last close, labelled "not live". Live/delayed quotes are Cloud-only (tool reference needed). |
+| Quotes | `GetLiveQuote` (Cloud), `GetLatestClosingPrices` | **Built**: `EquiblesQuotes` | Live quote first (Plus: 15-min delayed, Pro: real-time); falls back to the last close, saying why (e.g. Free plan). The live table format is only confirmed once on Plus: run `trading-pipeline check`. |
 | Intraday (1h) bars | Cloud-only | Gap | Needed for `short_term`; tool reference needed |
 | Sector performance (Agent 0) | `GetStockPrices` on SPY + the 11 sector ETFs | **Built**: `data/equibles_sectors.py` `EquiblesSectorData` | 1w/1m/3m/6m/YTD returns, 50/200-day MA position, vs benchmark |
-| Sector screen and breadth (Agent 1) | `GetFundProfile` (ETF NPORT-P holdings), `GetInstitutionPortfolio` (ticker mapping), `GetStockPrices` | **Built**: `EquiblesSectorData` | Constituents = the sector ETF's top holdings (default 25), usable once the report would have been public. Only the latest holdings report is served, so older backtests get gaps. Screen has price-based fields; ratios need the Cloud screener. |
+| Sector screen and breadth (Agent 1) | `GetEtfHoldings` (Cloud; ETF NPORT-P holdings with tickers), `GetStockPrices`; fallback `GetFundProfile` + `GetInstitutionPortfolio` (name-to-ticker) | **Built**: `EquiblesSectorData` | Constituents = the sector ETF's top holdings (default 25), usable once the report would have been public (period + 60 days). Only the latest holdings report is served, so older backtests get gaps. Screen has price-based fields; ratios (`ScreenStocks`, `GetValuationMultiples`) not yet wired. |
 | SEC filings | `ListFilings` | **Built**: `data/equibles_events.py` `EquiblesFilings` | 10-K/10-Q/8-K, known from the day after filing |
-| Catalyst events | `ListFilings`, `GetFdaAdvisoryCommitteeMeetings` | **Built**: `EquiblesNews` | 8-Ks normalised to events (category from items) for the news filter; FDA advisory meetings for healthcare sectors, visible 15 days ahead (legal minimum notice) |
-| Earnings date | `ListFilings` (8-K item 2.02 history) | **Built (estimate)**: `EquiblesNews.upcoming_earnings` | Estimated from past results filings, `confirmed: false`; gap when history is irregular |
+| Catalyst events | `ListFilings`, `GetFdaAdvisoryCommitteeMeetings`, `GetInvestorRelationsNews` (Cloud) | **Built**: `EquiblesNews` | 8-Ks normalised to events (category from items); company press releases from IR sites (known from the day after publication; partial coverage, gaps are noted); FDA advisory meetings for healthcare sectors, visible 15 days ahead |
+| Earnings date | `GetUpcomingInvestorEvents` (Cloud), `ListFilings` (8-K item 2.02 history) | **Built**: `EquiblesNews.upcoming_earnings` | Live runs: the company's announced date (`confirmed: true`) when its IR calendar has one. Backtests and companies without one: estimate from past results filings (`confirmed: false`). The IR calendar lists future events only, so it is never used for a past `as_of`. |
 | Macro | `GetEconomicIndicator`, `GetEconomicCalendar`, `GetVixHistory`, `GetPutCallRatios` | **Built**: `data/equibles_macro.py` `EquiblesMacro` | 13 FRED series, VIX, put/call, next 14 days of releases. A value counts only after its period ends plus a conservative publication lag. Latest-revised values (no vintages). |
-| Transcripts, guidance, screener ratios | Cloud-only | Later | Tool reference needed |
-| General news, analyst ratings, PDUFA dates, macro vintages, FOMC dates | Not provided | **Deferred** | |
+| Transcripts, guidance, screener ratios, analyst estimates | Cloud (`GetEarningsCallTranscript`, `GetGuidance`, `ScreenStocks`, `GetValuationMultiples`, `GetAnalystEstimates`) | Later | Available on the connector; not yet wired |
+| Third-party general news, PDUFA dates, macro vintages, FOMC dates | Not provided | **Deferred** | |
 
 The provider wiring (`app.py`) loads every adapter and builds the `HttpMcpClient` allowlist
-from the tools they declare (`TOOLS`).
+from the tools they declare (`TOOLS`); all are read-only Get/List tools. Equibles' account
+tools (portfolios, lots, watches) are never on it.
+
+**Verified against the hosted server:** every tool above was called through the Equibles
+connector and the real responses are replayed through the adapters in
+`tests/test_equibles_live_formats.py` (fixtures in `tests/fixtures/equibles_live`). Before a
+run, `trading-pipeline check` calls every provider once and fails on missing data.
 
 **Fundamentals connector:** for each concept it asks `GetFinancialFact` for both the
 originally reported and the latest restated values, each carrying its filing date, and
@@ -277,19 +283,23 @@ Choices made while scaffolding. Each one is easy to revisit.
 
 ## Remaining work
 
-**Built since the last review:** every Equibles adapter above, the `trading-pipeline` CLI
-(`cli.py`, `app.py`, [`operations.md`](operations.md)), macro data for every stage, filings
-for the company deep dive, Agent 5's "action needed" prompts, and one-review-per-position.
+**Built:** every Equibles adapter (§6), verified against real hosted responses; the
+`trading-pipeline` CLI including `check` and the `run --max-sectors/--shortlist` limits
+([`operations.md`](operations.md)); macro data for every stage; filings, 8-Ks and press
+releases for the company deep dive; the announced earnings calendar on live runs.
+
+**For the first run:**
+1. **Equibles Plus** (the Free plan's 100 calls/day can't cover a run; Plus also turns on
+   live quotes). **Anthropic API key.** Your investor profile.
+2. **Where to run:** your machine, or this cloud environment with `mcp.equibles.com`
+   allowed and both keys set as secrets.
+3. `trading-pipeline check`, then a small `run --max-sectors 1 --shortlist 3`, then a full run.
 
 **Still open:**
-1. **Equibles Cloud tools** (live/delayed quotes, intraday bars, screener ratios,
-   confirmed earnings calendar, transcripts): need their tool reference before adapters
-   can be written. Until then quotes are last closes and `short_term` has no hourly chart.
-2. **First live run** against the real Equibles and Anthropic APIs, to confirm the hosted
-   tools match the open-source formats the adapters were built from.
-3. **Testing** (§5): decide on the phased plan in [`testing-research.md`](testing-research.md);
-   `holdout_start` is used there.
-4. **News filter for biotech 8-Ks:** trial results and FDA news often arrive as items
-   7.01/8.01, which are treated as noise; catching them needs the filing text.
+- **Testing** (§5): approve Phase 0 of [`testing-research.md`](testing-research.md) (a daily
+  record of every recommendation) so evidence starts with the first run.
+- **More Cloud tools** (not needed for a first run): screener ratios for Agent 1,
+  guidance, analyst estimates and transcripts for the company deep dive.
+- **News filter for biotech 8-Ks** filed under items 7.01/8.01 (needs the filing text).
 
 **Future enhancements:** see §5.

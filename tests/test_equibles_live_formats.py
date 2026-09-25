@@ -48,11 +48,14 @@ async def test_prices_indicators_quotes():
 async def test_filings_events_earnings_fda():
     filings = await EquiblesFilings(Replay()).recent_filings("AAPL", SINCE, AS_OF)
     assert filings.payload and filings.payload[0]["sec_items"] == ["2.02", "9.01"]
-    news = EquiblesNews(Replay())
+    news = EquiblesNews(Replay(), now=now)
     events = await news.events("AAPL", SINCE, AS_OF)
     assert any(e["category"] == "earnings" for e in events.payload)
-    earnings = await news.upcoming_earnings("AAPL", AS_OF)
-    assert not earnings.is_gap and earnings.payload["confirmed"] is False
+    assert any(e.get("published") == "2026-09-14" for e in events.payload)  # IR press release
+    earnings = await news.upcoming_earnings("AAPL", AS_OF)  # live: the announced IR date wins
+    assert earnings.payload["confirmed"] is True and earnings.payload["next_earnings_date"] == "2026-10-01"
+    backtest = await EquiblesNews(Replay(), now=lambda: AS_OF.replace(month=12)).upcoming_earnings("AAPL", AS_OF)
+    assert backtest.payload["confirmed"] is False  # past as_of: 8-K cadence estimate only
     fda = await news.events("Health Care", datetime(2026, 9, 1, tzinfo=timezone.utc), AS_OF)
     assert not fda.is_gap
 

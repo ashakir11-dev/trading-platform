@@ -71,7 +71,8 @@ async def run_checks(data: DataProviders, as_of: datetime, *, ticker: str = "AAP
             return CheckResult("quote", "FAIL", _note(s))
         p: dict[str, Any] = s.payload or {}
         status: Status = "OK" if "live" in str(p.get("basis", "")).lower() and "not live" not in str(p.get("basis", "")) else "WARN"
-        return CheckResult("quote", status, f"{p.get('price')} ({p.get('basis', 'unknown basis')})")
+        why = f"; {p['why_not_live']}" if p.get("why_not_live") else ""
+        return CheckResult("quote", status, f"{p.get('price')} ({p.get('basis', 'unknown basis')}{why})"[:220])
 
     async def overview() -> CheckResult:
         snaps = await data.sectors.market_overview(as_of)

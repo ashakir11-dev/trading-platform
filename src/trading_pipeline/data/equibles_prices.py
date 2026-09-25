@@ -39,7 +39,7 @@ from zoneinfo import ZoneInfo
 
 from . import technicals as ta
 from .base import DataSnapshot, PriceBar
-from .equibles_md import find_table, number
+from .equibles_md import find_table, number, tables
 from .mcp import McpToolCaller
 
 EASTERN = ZoneInfo("America/New_York")
@@ -301,15 +301,52 @@ class EquiblesPrices:
         })
 
 
+LIVE_QUOTE_TOOL = "GetLiveQuote"
+
+
+def parse_live_quotes(text: str) -> dict[str, dict[str, Any]]:
+    """GetLiveQuote (Equibles Cloud, paid plans) -> {TICKER: {price, timestamp, stale}}.
+
+    Only the Free-plan answer (an upgrade notice, no table) has been seen so far, so this
+    accepts a table only when it clearly has a ticker column and a last-trade/price column,
+    and returns {} otherwise; callers then fall back to the last close. Run
+    ``trading-pipeline check`` after upgrading to confirm the quote row shows "live".
+    """
+    for rows in tables(text or ""):
+        if not rows:
+            continue
+        cols = list(rows[0])
+        tcol = next((c for c in cols if c.lower().startswith("ticker") or c.lower() == "symbol"), None)
+        pcol = next((c for c in cols if "last" in c.lower() or c.lower() == "price"), None)
+        if tcol is None or pcol is None:
+            continue
+        tscol = next((c for c in cols if "time" in c.lower() or "utc" in c.lower()), None)
+        stcol = next((c for c in cols if "stale" in c.lower()), None)
+        out = {}
+        for r in rows:
+            price = number(r[pcol])
+            if price is None:
+                continue
+            out[r[tcol].strip().upper()] = {
+                "price": float(price),
+                "timestamp": r[tscol] if tscol else None,
+                "stale": (r[stcol].strip().lower() in ("true", "yes", "stale")) if stcol else None,
+            }
+        return out
+    return {}
+
+
 class EquiblesQuotes:
     """``QuoteProvider`` from Equibles. READ-ONLY; there are no order methods by design.
 
-    Live and delayed quotes are Equibles Cloud-only (tool reference not available), so
-    ``quote`` returns the latest settled daily close from ``GetLatestClosingPrices``,
-    labelled as such. ``positions`` is always a gap: this system has no brokerage account.
+    ``quote`` first asks ``GetLiveQuote`` (Equibles Plus: 15-minute delayed, Pro: real-time,
+    consolidated SIP). On the Free plan, or whenever the answer isn't a recognisable quote
+    table or the quote is stale, it falls back to the latest settled daily close from
+    ``GetLatestClosingPrices``, labelled as such and saying why. ``positions`` is always a
+    gap: this system has no brokerage account.
     """
 
-    TOOLS: frozenset[str] = frozenset({LATEST_CLOSE_TOOL})
+    TOOLS: frozenset[str] = frozenset({LIVE_QUOTE_TOOL, LATEST_CLOSE_TOOL})
 
     def __init__(self, mcp: McpToolCaller, *,
                  now: Callable[[], datetime] = lambda: datetime.now(timezone.utc)) -> None:
@@ -318,6 +355,19 @@ class EquiblesQuotes:
 
     async def quote(self, ticker: str) -> DataSnapshot:
         now = self._now()
+        why_not_live = None
+        try:
+            live_text = str(await self._mcp.call_tool(LIVE_QUOTE_TOOL, {"tickers": [ticker]}))
+            live = parse_live_quotes(live_text).get(ticker.upper())
+            if live is not None and not live["stale"]:
+                return DataSnapshot(kind="quote", source="equibles", subject=ticker, as_of=now, payload={
+                    "price": live["price"], "timestamp": live["timestamp"],
+                    "basis": "live quote (Equibles GetLiveQuote: consolidated SIP; 15-min delayed on Plus)",
+                })
+            why_not_live = ("live quote is stale" if live is not None
+                            else (live_text.strip().splitlines() or ["no live quote"])[0][:160])
+        except Exception as e:
+            why_not_live = f"{LIVE_QUOTE_TOOL} failed: {e}"[:160]
         text = await self._mcp.call_tool(LATEST_CLOSE_TOOL, {"tickers": [ticker]})
         row = parse_latest_closes(str(text)).get(ticker.upper())
         if row is None or row["price"] is None:
@@ -329,6 +379,7 @@ class EquiblesQuotes:
             "price": row["price"],
             "as_of_date": row["date"].isoformat(),
             "basis": "last close (EOD), not live",
+            "why_not_live": why_not_live,
             "change_pct": row["change_pct"],
             "volume": row["volume"],
             "high_52w_close": row["high_52w"],
