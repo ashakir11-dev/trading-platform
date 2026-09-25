@@ -115,7 +115,8 @@ with no changes to the agents.
   visibility layer. **Read-only use only.**
 
 **Research:** [`data-sources-research.md`](data-sources-research.md) compares vendors
-across every category and recommends a stack. No stack has been chosen yet.
+across every category and recommends a stack. No stack has been chosen yet. [`live-prices-research.md`](live-prices-research.md)
+compares live-price options in more depth.
 
 **Criteria for choosing providers:**
 - **Point-in-time history.** Data must be retrievable as it was known on a past
