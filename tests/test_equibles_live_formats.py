@@ -71,3 +71,5 @@ async def test_sectors_parse():
     screen = await sectors.sector_screen("Health Care", AS_OF)
     coverage = next(s for s in screen if s.kind == "screen_coverage")
     assert coverage.payload["holdings_report_date"] == "2026-06-30"
+    assert "GetEtfHoldings" in coverage.payload["constituents_source"]
+    assert {s.subject for s in screen if s.kind == "screen" and not s.is_gap} == {"LLY", "JNJ", "ABBV"}

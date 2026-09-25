@@ -20,7 +20,9 @@ Names that match nothing, or match several sectors equally well, return gap snap
 
 Constituents: trade-offs of the options found in the source.
 
-* Sector ETF holdings via ``GetFundProfile`` (chosen). Real weights and a report date, but
+* Sector ETF holdings via ``GetEtfHoldings`` (Equibles Cloud; primary, since its rows carry
+  tickers), falling back to ``GetFundProfile`` when an ETF isn't covered.
+* Sector ETF holdings via ``GetFundProfile`` (the open-source fallback). Real weights and a report date, but
   the tool only serves the latest report (no report-date parameter). A report is used only
   if it would have been public by ``as_of`` (period end + ``nport_lag_days``, default 60:
   NPORT-P is due 60 days after quarter end). Older backtests therefore get gap snapshots;
@@ -55,10 +57,10 @@ Call budget (hosted MCP):
 
 * ``market_overview``: 12 ``GetStockPrices`` calls (SPY + 11 ETFs), plus 1-2 if SPY is
   missing (IVV, VOO fallbacks).
-* ``sector_screen``: 1 ``GetFundProfile`` + ``max_constituents`` (default 25)
+* ``sector_screen``: 1 ``GetEtfHoldings`` (or ``GetFundProfile``) + ``max_constituents`` (default 25)
   ``GetStockPrices`` + 1 for the ETF (reused from ``market_overview`` for the same ``as_of``),
-  plus the 13F name map: 1-``ticker_map_max_pages`` calls of 500 rows, fetched once per
-  provider instance and ``as_of``, shared by every sector. About 27 calls per sector.
+  plus, only for holdings without a ticker, the 13F name map: 1-``ticker_map_max_pages``
+  calls of 500 rows, fetched once per provider instance and ``as_of``, shared by every sector. About 27 calls per sector.
 * ``sector_breadth``: 0 extra calls after ``sector_screen`` for the same sector and ``as_of``
   (results are cached per instance); otherwise the same as ``sector_screen``.
 
@@ -84,6 +86,7 @@ EASTERN = ZoneInfo("America/New_York")
 MARKET_CLOSE = time(16, 0)
 
 PRICES_TOOL = "GetStockPrices"
+ETF_TOOL = "GetEtfHoldings"
 FUND_TOOL = "GetFundProfile"
 PORTFOLIO_TOOL = "GetInstitutionPortfolio"
 
@@ -220,6 +223,36 @@ def parse_prices(text: str) -> list[DailyBar]:
 _REPORTED = re.compile(r"reported (\d{4}-\d{2}-\d{2})")
 
 
+_ETF_REPORT = re.compile(r"holdings for (\d{4}-\d{2}-\d{2})")
+_CUSIP = re.compile(r"^[0-9A-Z]{9}$")
+
+
+def parse_etf_holdings(text: str) -> tuple[date | None, list[dict[str, Any]]]:
+    """GetEtfHoldings markdown (Equibles Cloud; format verified against the hosted server,
+    see tests/fixtures/equibles_live/GetEtfHoldings.md) -> (report period, holdings).
+
+    The "Ticker / CUSIP" column carries a ticker when Equibles knows one, else the CUSIP.
+    """
+    rows = find_table(text or "", {"Holding", "Ticker / CUSIP", "Value", "Weight", "Category"})
+    m = _ETF_REPORT.search(text or "")
+    if rows is None or m is None:
+        return None, []
+    out = []
+    for r in rows:
+        ident = r["Ticker / CUSIP"].strip().upper()
+        is_cusip = bool(_CUSIP.match(ident)) and any(ch.isdigit() for ch in ident)
+        value, weight = number(r["Value"]), number(r["Weight"])
+        out.append({
+            "name": r["Holding"],
+            "cusip": ident if is_cusip else None,
+            "listed_ticker": None if is_cusip or ident in ("", "-", "—") else ident,
+            "value_usd": float(value) if value is not None else None,
+            "weight_pct": float(weight) if weight is not None else None,
+            "category": r["Category"],
+        })
+    return date.fromisoformat(m.group(1)), out
+
+
 def parse_fund_profile(text: str) -> tuple[date | None, list[dict[str, Any]]]:
     """GetFundProfile markdown -> (report period date, holdings largest first)."""
     rows = find_table(text or "", {"Holding", "CUSIP", "Value (USD)", "% Net Assets", "Category"})
@@ -352,6 +385,7 @@ class _Constituents:
     holdings: list[dict[str, Any]]  # with "ticker" (or None), largest first
     weight_covered_pct: float
     notes: list[str]
+    source: str = FUND_TOOL
 
 
 # --------------------------------------------------------------------------------------
@@ -366,7 +400,7 @@ class EquiblesSectorData:
     allowed_tools=set(EquiblesSectorData.TOOLS), headers=...)``.
     """
 
-    TOOLS: frozenset[str] = frozenset({PRICES_TOOL, FUND_TOOL, PORTFOLIO_TOOL})
+    TOOLS: frozenset[str] = frozenset({PRICES_TOOL, ETF_TOOL, FUND_TOOL, PORTFOLIO_TOOL})
 
     def __init__(self, mcp: McpToolCaller, *, max_constituents: int = 25, nport_lag_days: int = 60,
                  ticker_map_institution: str = VANGUARD_CIK, ticker_map_max_pages: int = 6,
@@ -483,13 +517,23 @@ class EquiblesSectorData:
 
     async def _constituents(self, sector: Sector, as_of: datetime) -> _Constituents | str:
         async def build() -> _Constituents | str:
+            # Primary: GetEtfHoldings, which carries tickers. Fallback: GetFundProfile (names and
+            # CUSIPs only, tickers matched through the 13F name index below).
+            source = ETF_TOOL
             try:
-                text = await self._call(FUND_TOOL, {"fund": sector.etf, "maxResults": self._max + 15})
+                etf_text = await self._call(ETF_TOOL, {"ticker": sector.etf, "maxResults": self._max + 15})
             except Exception as e:
-                return f"{FUND_TOOL} failed for {sector.etf}: {e}"
-            report_date, holdings = parse_fund_profile(text)
+                etf_text = f"{ETF_TOOL} failed: {e}"
+            report_date, holdings = parse_etf_holdings(etf_text)
             if report_date is None:
-                return f"No NPORT-P holdings for {sector.etf}: {str(text).strip()[:200]}"
+                source = FUND_TOOL
+                try:
+                    text = await self._call(FUND_TOOL, {"fund": sector.etf, "maxResults": self._max + 15})
+                except Exception as e:
+                    return f"{FUND_TOOL} failed for {sector.etf}: {e}"
+                report_date, holdings = parse_fund_profile(text)
+                if report_date is None:
+                    return f"No NPORT-P holdings for {sector.etf}: {str(text).strip()[:200]}"
             public_by = report_date + self._nport_lag
             if public_by > _et_date(as_of):
                 return (f"The only NPORT-P holdings Equibles serves for {sector.etf} are for period "
@@ -506,6 +550,8 @@ class EquiblesSectorData:
             for h in equities:
                 h["ticker"] = self._cusip_tickers.get((h["cusip"] or "").upper())
                 h["ticker_source"] = "cusip_override" if h["ticker"] else None
+                if not h["ticker"] and h.get("listed_ticker"):
+                    h["ticker"], h["ticker_source"] = h["listed_ticker"], "etf_holdings"
                 if not h["ticker"]:
                     unresolved.append(normalize_company(h["name"]))
             if unresolved:
@@ -520,7 +566,7 @@ class EquiblesSectorData:
                         if len(tickers) > 1:
                             h["ticker_candidates"] = tickers
             covered = sum(h["weight_pct"] or 0 for h in equities)
-            return _Constituents(sector, report_date, equities, round(covered, 2), notes)
+            return _Constituents(sector, report_date, equities, round(covered, 2), notes, source)
 
         return await self._once(("constituents", sector.etf, as_of), build)
 
@@ -572,7 +618,7 @@ class EquiblesSectorData:
                                        f"covers the whole sector ETF, not only that industry.")
                 if how.startswith("alias:") else None,
                 "constituents_source": f"{s.etf} top holdings by value from its NPORT-P report for period "
-                                       f"{cons.report_date} (Equibles GetFundProfile)",
+                                       f"{cons.report_date} (Equibles {cons.source})",
                 "holdings_report_date": cons.report_date.isoformat(),
                 "constituents_screened": len(snaps),
                 "etf_weight_covered_pct": cons.weight_covered_pct,

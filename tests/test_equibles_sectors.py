@@ -6,6 +6,7 @@ import pytest
 
 from trading_pipeline.data.base import RawDataBundle
 from trading_pipeline.data.equibles_sectors import (
+    ETF_TOOL,
     FUND_TOOL,
     PORTFOLIO_TOOL,
     PRICES_TOOL,
@@ -109,6 +110,10 @@ class FakeEquibles:
             # Deliberately ignores endDate: the adapter must filter parsed rows itself.
             rows = [r for r in series(self.kinds[t]) if r[0] >= start][-args["maxResults"]:]
             return prices_text(t, rows)
+        if name == ETF_TOOL:
+            # This fake's ETFs aren't in the Cloud ETF tool, exercising the GetFundProfile fallback;
+            # test_etf_holdings_primary covers the primary path.
+            return f"No ETF holdings found for '{args['ticker']}'."
         if name == FUND_TOOL:
             if args["fund"] == "XLV":
                 return XLV_PROFILE
@@ -302,4 +307,33 @@ async def test_unknown_sector_and_missing_fund_are_gaps():
     assert (await provider(fake).sector_breadth("Quantum widgets", AS_OF)).is_gap
     snaps = await provider(fake).sector_screen("Energy", AS_OF)
     assert all(s.is_gap for s in snaps) and "No NPORT-P holdings for XLE" in snaps[0].note
-    assert fake.calls == [(FUND_TOOL, {"fund": "XLE", "maxResults": 40})]
+    assert fake.calls == [(ETF_TOOL, {"ticker": "XLE", "maxResults": 40}),
+                          (FUND_TOOL, {"fund": "XLE", "maxResults": 40})]
+
+
+
+async def test_etf_holdings_primary():
+    """GetEtfHoldings (real hosted format) supplies tickers directly: no 13F name matching."""
+    from pathlib import Path
+
+    etf_text = (Path(__file__).parent / "fixtures" / "equibles_live" / "GetEtfHoldings.md").read_text()
+
+    class Fake(FakeEquibles):
+        async def call_tool(self, name, args):
+            if name == ETF_TOOL:
+                self.calls.append((name, args))
+                return etf_text
+            return await super().call_tool(name, args)
+
+    fake = Fake()
+    # The 2026-06-30 report is public from 2026-08-29 (period + 60 days), so screen after that;
+    # as of AS_OF (06-30) the same report is correctly withheld.
+    later = datetime(2026, 9, 25, 21, 0, tzinfo=timezone.utc)
+    assert all(s.is_gap for s in await provider(Fake()).sector_screen("Health Care", AS_OF))
+    snaps = await provider(fake, now=lambda: later).sector_screen("Health Care", later)
+    screened = {s.subject: s.payload for s in snaps if s.kind == "screen" and not s.is_gap}
+    assert set(screened) == {"LLY", "JNJ", "ABBV"}
+    assert screened["LLY"]["ticker_source"] == "etf_holdings" and screened["LLY"]["etf_weight_pct"] == 16.51
+    assert fake.count(FUND_TOOL) == 0 and fake.count(PORTFOLIO_TOOL) == 0
+    cov = next(s for s in snaps if s.kind == "screen_coverage")
+    assert "GetEtfHoldings" in cov.payload["constituents_source"]
