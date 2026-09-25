@@ -47,9 +47,9 @@ Step-by-step runtime flow (sequence diagrams): [`sequence-diagrams.md`](sequence
 
 | Stage | Module | Runs | Input | Output |
 |---|---|---|---|---|
-| Agent 0: Market Scanner | `agents/market_scanner.py` | once per run | raw market and sector data | sectors with upside/downside potential |
+| Agent 0: Market Scanner | `agents/market_scanner.py` | once per run | sector ETF performance + macro data | sectors with upside/downside potential |
 | Agent 1: Sector Deep Dive | `agents/sector_deep_dive.py` | one per sector, in parallel | sector call + **bulk screen of every company in the sector** (key ratios, size, recent filings/events) + sector breadth, news, FDA, earnings | shortlist of ~10-30 companies, **ranked by potential score** |
-| Company Deep Dive | `agents/company_deep_dive.py` | one per company, in parallel | shortlist entry + market/sector data + **full company data** (fundamentals, filings, company news) | worthiness verdict; catalysts checked |
+| Company Deep Dive | `agents/company_deep_dive.py` | one per company, in parallel | shortlist entry + market/sector/macro data + **full company data** (fundamentals, recent SEC filings, 8-K events) | worthiness verdict; catalysts checked |
 | Technical Analysis | `agents/technical_analysis.py` | one per company, in parallel, **no cross-comparison** | candidate + **investor profile** + price/indicator/pivot data **for each chart timeframe the investor's horizons need** + earnings calendar | chart verdict + entry / exit / stop-loss / horizon / chart timeframe, or rejection; then **deterministic rules** check the plan |
 | Middleware | `middleware.py` | orchestrates | | report to the user |
 | Agent 5: Follow-Up | `agents/follow_up.py` | on a schedule, per accepted position | position + investor profile + fresh data | cheap tripwire checks (price vs stop/target, **material** news only) with a **12h alert cooldown**, plus a deep full re-review on alert or at an interval |
@@ -203,21 +203,23 @@ historical, point-in-time** version (to backtest it honestly):
 it doesn't provide is **deferred**. Agents still depend only on the provider interfaces
 in `data/base.py`, so this stays swappable.
 
-| Need | Equibles source | Adapter | Notes |
+| Need | Equibles tools | Adapter | Notes |
 |---|---|---|---|
-| Company fundamentals | `GetFinancialFact` (SEC XBRL with filing dates) | **Built** (`EquiblesFundamentals`) | Point-in-time; see below |
-| Daily price history | `GetStockPrices` | To build | Weekly bars derived from daily. History comes from Yahoo (self-hosted docs); delisted coverage unconfirmed |
-| Intraday (1h) bars, live quotes | Paid plans (Plus: 15-min delayed, Pro: real-time) | To build | Needed for `short_term` and the stale-entry check |
-| Indicators, support/resistance | Equibles has Bollinger, Stochastic, ATR, OBV | To build | Other indicators and pivots computed locally from Equibles prices |
-| Sector screen | Cloud screener | To build | Tool reference needed |
-| Sector breadth | Derived from Equibles prices + industry classification | To build | |
-| SEC filings / 8-Ks | `ListFilings`, `SearchDocuments` | To build | Main catalyst and alert source; 8-K items feed the news filter |
-| FDA | `GetFdaAdvisoryCommitteeMeetings` | To build | Advisory meetings only; PDUFA dates **deferred** |
-| Macro | FRED tools (`GetEconomicIndicator`, ...) | To build | Latest revised values only; point-in-time vintages **deferred** |
-| Earnings calendar | Unconfirmed | To confirm | Deferred if not provided |
-| Earnings transcripts, guidance | Cloud plans | Later | Useful for the company deep dive |
-| General news headlines | Not provided | **Deferred** | Filings stand in for news |
-| Analyst ratings | Not provided | **Deferred** | |
+| Company fundamentals | `GetFinancialFact` | **Built**: `data/equibles.py` `EquiblesFundamentals` | Point-in-time by filing date; see below |
+| Daily/weekly prices, indicators, support/resistance | `GetStockPrices` | **Built**: `data/equibles_prices.py` `EquiblesPrices`, math in `data/technicals.py` | Weekly bars and all indicators/pivots computed locally. A bar counts from 16:00 ET on its date. **Backtest caveat:** Equibles restates the whole history after each split and exposes no split events, so past absolute levels reflect later splits (percent moves and indicator shapes are unaffected). |
+| Quotes | `GetLatestClosingPrices` | **Built**: `EquiblesQuotes` | Last close, labelled "not live". Live/delayed quotes are Cloud-only (tool reference needed). |
+| Intraday (1h) bars | Cloud-only | Gap | Needed for `short_term`; tool reference needed |
+| Sector performance (Agent 0) | `GetStockPrices` on SPY + the 11 sector ETFs | **Built**: `data/equibles_sectors.py` `EquiblesSectorData` | 1w/1m/3m/6m/YTD returns, 50/200-day MA position, vs benchmark |
+| Sector screen and breadth (Agent 1) | `GetFundProfile` (ETF NPORT-P holdings), `GetInstitutionPortfolio` (ticker mapping), `GetStockPrices` | **Built**: `EquiblesSectorData` | Constituents = the sector ETF's top holdings (default 25), usable once the report would have been public. Only the latest holdings report is served, so older backtests get gaps. Screen has price-based fields; ratios need the Cloud screener. |
+| SEC filings | `ListFilings` | **Built**: `data/equibles_events.py` `EquiblesFilings` | 10-K/10-Q/8-K, known from the day after filing |
+| Catalyst events | `ListFilings`, `GetFdaAdvisoryCommitteeMeetings` | **Built**: `EquiblesNews` | 8-Ks normalised to events (category from items) for the news filter; FDA advisory meetings for healthcare sectors, visible 15 days ahead (legal minimum notice) |
+| Earnings date | `ListFilings` (8-K item 2.02 history) | **Built (estimate)**: `EquiblesNews.upcoming_earnings` | Estimated from past results filings, `confirmed: false`; gap when history is irregular |
+| Macro | `GetEconomicIndicator`, `GetEconomicCalendar`, `GetVixHistory`, `GetPutCallRatios` | **Built**: `data/equibles_macro.py` `EquiblesMacro` | 13 FRED series, VIX, put/call, next 14 days of releases. A value counts only after its period ends plus a conservative publication lag. Latest-revised values (no vintages). |
+| Transcripts, guidance, screener ratios | Cloud-only | Later | Tool reference needed |
+| General news, analyst ratings, PDUFA dates, macro vintages, FOMC dates | Not provided | **Deferred** | |
+
+The provider wiring (`app.py`) loads every adapter and builds the `HttpMcpClient` allowlist
+from the tools they declare (`TOOLS`).
 
 **Fundamentals connector:** for each concept it asks `GetFinancialFact` for both the
 originally reported and the latest restated values, each carrying its filing date, and
@@ -275,27 +277,19 @@ Choices made while scaffolding. Each one is easy to revisit.
 
 ## Remaining work
 
-**Blocking a first real run (all Equibles adapters, §6):**
-1. Prices: daily history, intraday bars, live quotes, plus locally computed indicators
-   and support/resistance levels.
-2. Sector screen and derived sector breadth (Agent 1's input).
-3. Filings/8-Ks as the catalyst and alert source; FDA advisory meetings; earnings
-   calendar if Equibles has one.
-4. A way to run and operate the system: CLI for runs, decisions, closing positions,
-   reviews and approving improvement notes, plus a scheduled Agent 5 tick.
+**Built since the last review:** every Equibles adapter above, the `trading-pipeline` CLI
+(`cli.py`, `app.py`, [`operations.md`](operations.md)), macro data for every stage, filings
+for the company deep dive, Agent 5's "action needed" prompts, and one-review-per-position.
 
-**Design gaps to close:**
-5. Macro data: no agent receives any yet, although agents are told to weigh macro
-   exposure and the process agent penalizes missing it. Add a macro interface fed by
-   Equibles' FRED tools.
-6. Filings interface for the company deep dive (the design lists filings as its input).
-7. Agent 1 input: add FDA/earnings events for the sector (design lists them).
-8. `holdout_start` is defined but unused (belongs to the testing harness).
-9. The look-ahead guard checks snapshot dates, not payload contents: every real adapter
-   needs tests proving it filters by `as_of`.
-10. Agent 5 could prompt the user to close and review a position when a stop or target
-    is hit (today closing and reviewing are manual).
-
-**Research in progress:** backtesting and forward-testing options (§5).
+**Still open:**
+1. **Equibles Cloud tools** (live/delayed quotes, intraday bars, screener ratios,
+   confirmed earnings calendar, transcripts): need their tool reference before adapters
+   can be written. Until then quotes are last closes and `short_term` has no hourly chart.
+2. **First live run** against the real Equibles and Anthropic APIs, to confirm the hosted
+   tools match the open-source formats the adapters were built from.
+3. **Testing** (§5): decide on the phased plan in [`testing-research.md`](testing-research.md);
+   `holdout_start` is used there.
+4. **News filter for biotech 8-Ks:** trial results and FDA news often arrive as items
+   7.01/8.01, which are treated as noise; catching them needs the filing text.
 
 **Future enhancements:** see §5.

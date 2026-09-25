@@ -4,9 +4,10 @@ A multi-agent research pipeline for US equities. Independent AI agents narrow th
 whole market down to a few trade ideas, each backed by structured, checkable
 reasoning. You make every decision. **The system never places orders.**
 
-> **Status: early scaffold.** The pipeline, agents, rules and feedback loop are built
-> and tested, but they run against test fixtures. Most real data connectors still have
-> to be wired up (see [Status](#status)). Nothing here is financial advice.
+> **Status: built, not yet run live.** The pipeline, agents, rules, feedback loop,
+> Equibles data connectors and CLI are built and tested offline. The first run against
+> the live Equibles and Anthropic APIs is still to come (see [Status](#status)).
+> Nothing here is financial advice.
 
 ## How it works
 
@@ -116,66 +117,56 @@ pip install -e '.[equibles-postgres]'  # self-hosted Equibles database
 
 ### Configuration
 
-| Setting | Where |
-|---|---|
-| Anthropic API key | `ANTHROPIC_API_KEY` environment variable (or an `ant auth login` profile) |
-| Model, effort | `PipelineConfig.llm` (default `claude-opus-5`, effort `high`) |
-| Investor profile | copy `profile.example.json`, load with `InvestorProfile.load(path)` |
-| Rule limits, alert cooldown, review interval | `PipelineConfig` in `src/trading_pipeline/config.py` |
-| Equibles API key | pass as a `Bearer` header to `HttpMcpClient` |
-
-### Wiring a run
-
-There is no CLI yet. A run is wired in Python. Only the fundamentals provider exists
-today; the price and quote providers (Equibles) still need to be built before a live run
-works.
-
-```python
-import asyncio
-from datetime import datetime, timezone
-
-from trading_pipeline import Middleware, PipelineConfig, Store, render_report
-from trading_pipeline.data import DataProviders
-from trading_pipeline.data.equibles import EQUIBLES_MCP_URL, FACT_TOOL, EquiblesFundamentals
-from trading_pipeline.data.gaps import UnavailableNews, UnavailableSectorData
-from trading_pipeline.data.mcp import HttpMcpClient
-from trading_pipeline.llm import AnthropicLLM
-from trading_pipeline.profile import InvestorProfile
-
-
-async def main(equibles_key: str, prices, quotes):
-    config = PipelineConfig(profile=InvestorProfile.load("my-profile.json"))
-    async with HttpMcpClient(EQUIBLES_MCP_URL, allowed_tools={FACT_TOOL},
-                             headers={"Authorization": f"Bearer {equibles_key}"}) as mcp:
-        data = DataProviders(prices=prices, quotes=quotes,
-                             sectors=UnavailableSectorData(), news=UnavailableNews(),
-                             fundamentals=EquiblesFundamentals(mcp))
-        mw = Middleware(config, AnthropicLLM(config.llm), data, Store("pipeline.sqlite3"))
-        report = await mw.run(datetime.now(timezone.utc))
-        print(render_report(report))
-        # Your decision; only accepted candidates enter the follow-up loop:
-        # mw.record_decision(candidate_id, accepted=True)
+```bash
+pip install -e '.[equibles]'
+export EQUIBLES_API_KEY=...        # market data
+export ANTHROPIC_API_KEY=...       # the agents
+export TRADING_PROFILE=~/.trading-platform/profile.json   # optional; copy profile.example.json
 ```
 
-The tests (`tests/test_pipeline.py`) run the complete flow end to end with a scripted
-LLM and fixture data, which is the best reference for how the pieces fit.
+Other settings (database path, model and effort overrides) are in
+[`docs/operations.md`](docs/operations.md).
+
+### Using it
+
+```bash
+trading-pipeline run                              # after the close; prints the report
+trading-pipeline decide CANDIDATE_ID accept       # or reject, with --note
+trading-pipeline positions
+trading-pipeline follow-up                        # Agent 5; schedule it with cron
+trading-pipeline close POSITION_ID --price 123.45 # after you exit
+trading-pipeline review POSITION_ID               # outcome + process review
+trading-pipeline notes                            # improvement suggestions
+trading-pipeline approve-note NOTE_ID             # only approved notes reach prompts
+```
+
+`trading-pipeline run --as-of DATE --backtest` runs as of a past close. The full
+workflow, cron examples and where data is stored are in
+[`docs/operations.md`](docs/operations.md).
+
+The tests (`tests/test_pipeline.py`, `tests/test_cli.py`) run the complete flow end to
+end with a scripted LLM and fixture data.
 
 ## Data sources
 
-All data comes from **[Equibles](https://equibles.com)** (hosted MCP + REST). Anything it
+All data comes from **[Equibles](https://equibles.com)** (hosted MCP), through one
+read-only client that can only call the tools the connectors declare. Anything Equibles
 doesn't provide is deferred. Agents depend only on the provider interfaces in
 `src/trading_pipeline/data/base.py`, never on the vendor.
 
-| Category | Current state |
+| Category | State |
 |---|---|
-| Company fundamentals | **Built**: Equibles, point-in-time by filing date |
-| Prices, intraday bars, live quotes, indicators | To build on Equibles |
-| Sector screen and breadth | To build (screener + breadth derived from prices) |
-| SEC filings / 8-Ks, FDA advisory meetings, macro (FRED) | To build on Equibles |
-| Earnings calendar | To confirm with Equibles |
-| General news headlines, analyst ratings, PDUFA dates | Deferred (not in Equibles) |
+| Company fundamentals (point-in-time by filing date) | Built |
+| Daily/weekly prices, indicators, support/resistance | Built (computed locally from Equibles prices) |
+| Sector performance, sector screen and breadth | Built (sector ETFs and their filed holdings) |
+| SEC filings, 8-K catalyst events, FDA advisory meetings | Built |
+| Macro (FRED series, VIX, put/call, release calendar) | Built |
+| Earnings date | Built as an estimate from past results filings |
+| Live quotes, intraday bars, screener ratios, transcripts | Equibles Cloud tools; need their tool reference (quotes use the last close meanwhile) |
+| General news, analyst ratings, FDA decision dates | Deferred (not in Equibles) |
 
-The full mapping is in [`docs/ARCHITECTURE.md` §6](docs/ARCHITECTURE.md#6-data-requirements).
+Details and backtest caveats are in
+[`docs/ARCHITECTURE.md` §6](docs/ARCHITECTURE.md#6-data-requirements).
 
 ## Project layout
 
@@ -190,12 +181,14 @@ src/trading_pipeline/
   config.py            PipelineConfig / LLMConfig
   llm.py               Claude access via structured outputs
   store.py             SQLite: reasoning logs, snapshots, positions, reviews, user decisions
+  cli.py, app.py       trading-pipeline command and provider wiring
   data/base.py         provider interfaces, point-in-time RawDataBundle
-  data/equibles.py     Equibles fundamentals (hosted MCP or self-hosted Postgres)
+  data/equibles*.py    Equibles connectors: fundamentals, prices, sectors, events, macro
+  data/technicals.py   indicators and support/resistance computed from price bars
   data/mcp.py          allowlisted MCP client + skeleton vendor adapters
   data/gaps.py         explicit placeholders for missing data
 tests/                 scripted-LLM + fixture tests
-docs/                  architecture, sequence diagrams, data research
+docs/                  architecture, operations guide, sequence diagrams, research
 profile.example.json   example investor profile
 ```
 
@@ -211,13 +204,14 @@ SQL tests also run when `EQUIBLES_TEST_DSN` points at a scratch UTF-8 Postgres d
 ## Status
 
 **Built:** all agents, middleware, structured reasoning log, point-in-time data guard,
-investor profile, rules module, conflict recording, follow-up alerts with a news filter and
-cooldown, outcomes and process review with human-approved improvements, Equibles
-fundamentals.
+investor profile, rules, conflict recording, follow-up alerts (news filter, cooldown,
+"action needed" prompts), outcomes and process review with human-approved improvements,
+all Equibles connectors, and the `trading-pipeline` CLI.
 
-**Next:** Equibles adapters for prices, quotes, sector screen, filings, FDA and macro
-data; a CLI for runs and decisions; then backtesting and forward testing (being
-researched). The full list is in
+**Next:** the first live run against Equibles and Anthropic; Equibles Cloud tools (live
+quotes, intraday bars, screener ratios) once their reference is available; and
+backtesting/forward testing, planned in [`docs/testing-research.md`](docs/testing-research.md).
+The full list is in
 [`docs/ARCHITECTURE.md` → Remaining work](docs/ARCHITECTURE.md#remaining-work).
 
 ## Disclaimer

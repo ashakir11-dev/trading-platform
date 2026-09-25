@@ -26,8 +26,8 @@ sequenceDiagram
     User->>MW: run(as_of)
     MW->>Store: load approved improvement notes (lessons per stage)
 
-    MW->>Data: market_overview(as_of)
-    Data-->>MW: market snapshots
+    MW->>Data: market_overview(as_of), macro(as_of)
+    Data-->>MW: sector ETF performance + macro snapshots (market-level, reach every stage)
     Note over MW: Rule: reject any snapshot dated after as_of (look-ahead guard)
     MW->>Store: save snapshots
     MW->>A0: raw market data
@@ -47,8 +47,8 @@ sequenceDiagram
 
     par one independent pass per company
         Note over MW: Rule: filter raw data to market + sector + this company only
-        MW->>Data: fundamentals(ticker, as_of), company news
-        Data-->>MW: point-in-time financials + news (or explicit data-gap snapshots)
+        MW->>Data: fundamentals, recent_filings, 8-K events (ticker, as_of)
+        Data-->>MW: point-in-time financials, filings, events (or explicit data-gap snapshots)
         MW->>A2: Agent 0 + Agent 1 reports (confidence hidden) + filtered raw data
         A2-->>MW: CompanyDeepDiveOutput (verdict, catalyst checks, reasoning)
     end
@@ -106,10 +106,10 @@ sequenceDiagram
         A5->>Store: save TripwireResult (tripped, alerted)
         alt alert raised OR full-review interval elapsed
             A5->>Store: load original reasoning trail
-            A5->>Data: fresh charts for the plan's horizon, fundamentals, earnings
+            A5->>Data: fresh charts for the plan's horizon, macro, fundamentals, filings, earnings
             A5->>A5: LLM full re-review with investor profile (hold / adjust plan / exit)
             A5->>Store: log StageRecord, update last_full_review_at
-            A5-->>User: flag (advice only)
+            A5-->>User: flag (advice only), plus "action needed" if the stop/target was hit or exit advised
         end
     end
 
