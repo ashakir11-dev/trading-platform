@@ -45,6 +45,18 @@ async def test_prices_indicators_quotes():
     assert quote.payload["price"] == 335.92 and "not live" in quote.payload["basis"]
 
 
+class ProReplay(Replay):
+    async def call_tool(self, name, arguments):
+        if name == "GetLiveQuote":
+            return (FIX / "GetLiveQuote.pro.md").read_text()
+        return await super().call_tool(name, arguments)
+
+
+async def test_live_quote_on_pro_plan():
+    quote = await EquiblesQuotes(ProReplay(), now=now).quote("AAPL")
+    assert quote.payload["price"] == 341.30 and quote.payload["basis"].startswith("live quote")
+
+
 async def test_filings_events_earnings_fda():
     filings = await EquiblesFilings(Replay()).recent_filings("AAPL", SINCE, AS_OF)
     assert filings.payload and filings.payload[0]["sec_items"] == ["2.02", "9.01"]
