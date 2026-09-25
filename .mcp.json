@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "equibles": {
+      "type": "http",
+      "url": "https://mcp.equibles.com/mcp",
+      "headers": {"Authorization": "Bearer ${EQUIBLES_API_KEY}"}
+    }
+  }
+}

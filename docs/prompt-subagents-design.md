@@ -115,8 +115,10 @@ prompt version (commit) it ran with, and a bad lesson can be reverted.
 
 ## 4. Workspace layout (data, outside git)
 
-Analyses contain Equibles data and grow every day, so they live outside the repo:
-`~/.trading-platform/workspace/` (or `TRADING_WORKSPACE`).
+Analyses contain Equibles data and grow every day, so they stay out of git: they live
+in `workspace/` at the repository root, which is git-ignored. Keeping it inside the
+project lets Claude Code's project permissions and hooks cover it. The exact formats
+the agents follow are in [`prompts/formats.md`](../prompts/formats.md).
 
 ```
 workspace/
@@ -253,14 +255,31 @@ both:
   hard rule. The risk: the agents drift toward what you tend to accept rather than
   what works.
 
+**Decided (D0): the split above.**
+
 **Agent 5 reads everything except `decisions/`.** It gets `Read` on `agents/` and
 `positions/`. Your reasoning and notes stay out.
+
+**Hooks enforce the critical rules.** Prompts ask; two small Claude Code hooks
+(`.claude/hooks/workspace_guard.py`, wired in `.claude/settings.json`, tested in
+`tests/test_workspace_guard.py`) make the following hold even when a prompt is ignored.
+Hook input carries `agent_id`/`agent_type` inside a subagent, which is what makes
+per-agent rules possible. They hold no pipeline logic.
+
+| Hook | Rule |
+|---|---|
+| PreToolUse | Equibles write tools denied for everyone. |
+| PreToolUse | A subagent can't read, write, search or name `workspace/decisions/` (the decisions firewall). Searches must be rooted below it or elsewhere. |
+| PreToolUse | The middleware agent can't call data tools; `*-backtest` agents can't either. |
+| PreToolUse | A subagent's data calls are blocked until it has written `claim.md` in its analysis folder. |
+| PostToolUse | The first write inside `workspace/agents/<agent>/analyses/<run>/<subject>/` claims that folder for the subagent. |
+| PostToolUse | Every Equibles response a subagent receives is saved verbatim to `<folder>/raw/NNN-<Tool>.json`. Raw data travels with the analysis without the agent re-typing it, and evaluation sees exactly what the agent saw. |
 
 | Rule / principle | Today (code) | This design | Gap |
 |---|---|---|---|
 | **No look-ahead (`as_of`)** | Every provider takes `as_of`; later snapshots are rejected; statements count from the day after filing; macro after a publication lag. | **Live:** `as_of` = now, so nothing later exists. **Backtest (D1, §10):** stage agents get no Equibles tools; a gatekeeper agent fetches and filters, an auditor agent checks each pack. | The filter is a model, not code, and Equibles lacks some history (split-adjusted prices, revised macro, latest-only ETF holdings). Results are labelled `audited`, not guaranteed. |
 | **MCP only via `HttpMcpClient` + allowlist** | Allowlist built from adapters' `TOOLS`. | Per-subagent `tools:` lists plus `permissions.deny` in `.claude/settings.json`. | Enforced by Claude Code, not our code; `CLAUDE.md` reworded (D2). The Equibles server has **write tools**: `CreateMyPortfolio`, `AddPortfolioLot`, `UpdatePortfolioLot`, `ClosePortfolioLot`, `RemovePortfolioLot`, `DeleteMyPortfolio`, `WatchInstrument`, `UnwatchInstrument`, `ReportProblem`, `SuggestToolImprovement`. All go on the deny list. |
-| **Decisions firewall** | Separate table; `Store.review_trail()` excludes it. | `decisions/` read by the middleware agent only; `permissions.deny` on that path for every subagent. | The middleware agent reads both decisions and agent briefs, so its prompt must never copy one into the other. Weaker than code. |
+| **Decisions firewall** | Separate table; `Store.review_trail()` excludes it. | `decisions/` read by the middleware agent only; the PreToolUse hook blocks every subagent from it. | The middleware agent reads both decisions and agent briefs, so its prompt must never copy one into the other. |
 | **Deterministic rules** | `rules.py` | **In prompts (D3).** The technical-analysis agent reads the investor profile and applies every rule in ARCHITECTURE.md §4 to its own plan, recording each result (pass / reject / flag, with the numbers) in its analysis. The middleware agent re-checks price order, max loss and reward:risk from the analysis before reporting. | Arithmetic by a model; the recorded numbers make a slip visible to evaluation. |
 | **Outcomes without judgment** | Plain code | **In prompts (D3):** evaluator subagents compute return, drawdown and stop/target hits (per the profile's `level_trigger`) and show the bars used. | As above. |
 | **Gaps are explicit** | `Unavailable*` providers | Prompt rule: failed or empty tool calls go under "Data gaps" and in `raw/` as `UNAVAILABLE`. | Relies on the agent. |
@@ -278,16 +297,13 @@ from reasoning review.
 
 | # | Decision |
 |---|---|
+| D0 | Evaluation writes "agent vs market" (feedback reads it) and "agent vs your trade" (middleware agent, `decisions/reviews/`, shown to you only; never a lesson). |
 | D1 | Backtests run through a gatekeeper agent (fetch + point-in-time filter) and an independent auditor agent; stage agents get no Equibles tools in backtests (§10). |
 | D2 | `CLAUDE.md` hard rules reworded for this design (tool allowlists in subagent definitions; `as_of` enforced by prompt and checked from `raw/`). |
-| D3 | Rules and outcome arithmetic move into prompts. The technical-analysis agent reads the investor profile (`~/.trading-platform/profile.json`, format of `profile.example.json`) and applies the rules; follow-up and evaluators read it for `level_trigger`. |
+| D3 | Rules and outcome arithmetic move into prompts. The technical-analysis agent reads the investor profile (`workspace/profile.json`, else `profile.example.json`; copied into each run) and applies the rules; follow-up and evaluators read it for `level_trigger`. |
 | D4 | Agentic only for now. No side-by-side run with the Python pipeline. |
 | D5 | Call budgets and per-agent models are not considered for now. |
 
-**Open:**
-
-- **D0. Your trade in evaluation:** the two-output split in §7 (recommended), or let
-  feedback learn from your decisions (rewords a hard rule).
 
 ## 9. Suggested order
 
@@ -298,6 +314,8 @@ from reasoning review.
 5. Evaluation and feedback prompts for every agent; `/evaluate`, `/feedback`,
    `/approve`.
 6. Backtest mode: gatekeeper, pit-auditor, `-backtest` agent variants, `/backtest`.
+
+**Built so far:** step 1 and step 2 (see §11).
 
 ## 10. Backtest mode (D1)
 
@@ -404,3 +422,24 @@ audit.md             pit-auditor verdict: clean | leaks (field, file, date)
 
 Forward testing (every live run, graded by the evaluators as outcomes arrive) stays the
 main evidence.
+
+## 11. Running it
+
+Needs the Claude Code CLI, `ANTHROPIC_API_KEY` and `EQUIBLES_API_KEY` (the Equibles
+server is configured in `.mcp.json`, which reads the key from the environment).
+
+**Once per machine:** run `claude` interactively in the repository and accept the
+trust dialog and the `equibles` MCP server. Until then Claude Code ignores the
+project's permission allow rules. The hooks and deny rules apply either way.
+
+Interactive: start `claude` in the repository and use `/run --max-sectors 1 --shortlist 3`,
+`/run-agent sector-deep-dive "Energy" upside`, `/decide <candidate_id> accept "note"`.
+
+Headless (cron):
+
+```sh
+claude -p "/run" --mcp-config .mcp.json --permission-mode acceptEdits
+```
+
+Everything a run produces is under `workspace/`: `runs/<run_id>/report.md` first,
+then each agent's `analyses/<run_id>/` folder.

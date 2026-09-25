@@ -1,0 +1,70 @@
+{
+  "enabledMcpjsonServers": [
+    "equibles"
+  ],
+  "permissions": {
+    "allow": [
+      "Agent",
+      "Task",
+      "Read(workspace/**)",
+      "Edit(workspace/**)",
+      "Bash(date:*)",
+      "Bash(mkdir:*)",
+      "Bash(ls:*)",
+      "Bash(git rev-parse:*)",
+      "Bash(git status:*)",
+      "mcp__equibles__GetStockPrices",
+      "mcp__equibles__GetLatestClosingPrices",
+      "mcp__equibles__GetLiveQuote",
+      "mcp__equibles__GetEconomicIndicator",
+      "mcp__equibles__GetLatestEconomicIndicators",
+      "mcp__equibles__GetEconomicCalendar",
+      "mcp__equibles__GetVixHistory",
+      "mcp__equibles__GetPutCallRatios",
+      "mcp__equibles__GetEtfHoldings",
+      "mcp__equibles__GetEtfProfile",
+      "mcp__equibles__ScreenStocks",
+      "mcp__equibles__GetValuationMultiples",
+      "mcp__equibles__ListFilings",
+      "mcp__equibles__GetFdaAdvisoryCommitteeMeetings",
+      "mcp__equibles__GetUpcomingInvestorEvents",
+      "mcp__equibles__GetInvestorRelationsNews"
+    ],
+    "deny": [
+      "mcp__equibles__CreateMyPortfolio",
+      "mcp__equibles__DeleteMyPortfolio",
+      "mcp__equibles__AddPortfolioLot",
+      "mcp__equibles__UpdatePortfolioLot",
+      "mcp__equibles__ClosePortfolioLot",
+      "mcp__equibles__RemovePortfolioLot",
+      "mcp__equibles__WatchInstrument",
+      "mcp__equibles__UnwatchInstrument",
+      "mcp__equibles__ReportProblem",
+      "mcp__equibles__SuggestToolImprovement"
+    ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/.claude/hooks/workspace_guard.py\" pre"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit|MultiEdit|mcp__equibles__.*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/.claude/hooks/workspace_guard.py\" post"
+          }
+        ]
+      }
+    ]
+  }
+}

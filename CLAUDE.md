@@ -18,5 +18,9 @@ Hard rules:
   used is kept in its `raw/` folder so this can be checked. In backtests, stage agents get no data tools: only
   the gatekeeper agent calls Equibles, and every data pack passes the pit-auditor before a stage agent reads it.
 
+Subagent pipeline: prompts in `prompts/`, subagents and commands in `.claude/`, run data in git-ignored
+`workspace/`. `.claude/hooks/workspace_guard.py` enforces the decisions firewall, the read-only tool rule and
+raw-data capture; keep `tests/test_workspace_guard.py` passing when changing it.
+
 Dev: `python -m venv .venv && . .venv/bin/activate && pip install -e '.[dev]' && pytest`
 Set `EQUIBLES_TEST_DSN` (a scratch UTF-8 Postgres database) to also run the Equibles SQL tests.
