@@ -192,7 +192,7 @@ class Middleware:
                               rejections=rejections)
 
     def _select_shortlist(self, shortlist: list[ShortlistEntry]) -> tuple[list[ShortlistEntry], list[ShortlistEntry]]:
-        """Apply the (still open) Agent 1 format decision. Returns (forwarded, not forwarded)."""
+        """Apply the Agent 1 format decision (ranked by default). Returns (forwarded, not forwarded)."""
         cfg = self.config
         passed = [e for e in shortlist if e.passed]
         if cfg.confidence_gate is not None:

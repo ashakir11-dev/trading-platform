@@ -42,6 +42,8 @@ flowchart TD
     PROC -.improvement signal.-> A0
 ```
 
+Step-by-step runtime flow (sequence diagrams): [`sequence-diagrams.md`](sequence-diagrams.md).
+
 ## 2. Stage responsibilities
 
 | Stage | Module | Runs | Input | Output |
