@@ -79,15 +79,23 @@ prompts/
   middleware/
     role.md                      orchestration rules, the decisions firewall (§7)
     report.md                    how the report to you is written
+    backtest.md                  backtest relay loop (§10)
+  gatekeeper/role.md             backtest only: fetch + point-in-time filter (§10)
+  pit-auditor/role.md            backtest only: independent check of each data pack (§10)
 
 .claude/agents/                  subagent definitions (frontmatter: name, description,
   <agent>.md                       tools, model); default + isolation modes
   <agent>-evaluator.md           evaluation mode (different tools)
   <agent>-feedback.md            feedback mode (no market-data tools)
+  <agent>-backtest.md            backtest mode: no Equibles tools, reads its data pack
+  gatekeeper.md                  the only backtest agent with Equibles tools
+  pit-auditor.md                 Read on data packs only
 
 .claude/commands/                your entry points into the middleware agent
   run.md                         /run [--max-sectors N] [--shortlist N]
-  run-agent.md                   /run-agent <agent> <subject>   (isolation)
+  backtest.md                    /backtest --as-of DATE [--max-sectors N] [--shortlist N]
+  run-agent.md                   /run-agent <agent> <subject> [--as-of DATE]
+                                 (isolation; a past date runs in backtest mode)
   decide.md                      /decide <candidate_id> accept|reject [note]
   trade.md                       /trade <position_id> entered|exited <price> [date]
   follow-up.md                   /follow-up                      (cron)
@@ -112,8 +120,10 @@ Analyses contain Equibles data and grow every day, so they live outside the repo
 
 ```
 workspace/
-  runs/<run_id>/run.md                    manifest: as_of, mode, agents run, prompt
-                                          commit, links to each analysis
+  runs/<run_id>/run.md                    manifest: as_of, mode (live | backtest), agents
+                                          run, prompt commit, links to each analysis,
+                                          point_in_time (backtests, §10)
+  runs/<run_id>/packs/<stage>/<subject>/  backtests only: gatekeeper data pack + audit (§10)
   agents/<agent>/
     analyses/<run_id>/<subject>/          subject = "market", a sector or a ticker
       analysis.md                         the agent's output (format below)
@@ -248,7 +258,7 @@ both:
 
 | Rule / principle | Today (code) | This design | Gap |
 |---|---|---|---|
-| **No look-ahead (`as_of`)** | Every provider takes `as_of`; later snapshots are rejected; statements count from the day after filing; macro after a publication lag. | Agents call Equibles directly; most tools return current data. | **Live runs are safe**: `as_of` = now. **Backtests are not point-in-time.** Isolation runs on a past date aren't either. The filing-day and publication-lag rules become prompt instructions. See D1. |
+| **No look-ahead (`as_of`)** | Every provider takes `as_of`; later snapshots are rejected; statements count from the day after filing; macro after a publication lag. | **Live:** `as_of` = now, so nothing later exists. **Backtest (D1, §10):** stage agents get no Equibles tools; a gatekeeper agent fetches and filters, an auditor agent checks each pack. | The filter is a model, not code, and Equibles lacks some history (split-adjusted prices, revised macro, latest-only ETF holdings). Results are labelled `audited`, not guaranteed. |
 | **MCP only via `HttpMcpClient` + allowlist** | Allowlist built from adapters' `TOOLS`. | Per-subagent `tools:` lists plus `permissions.deny` in `.claude/settings.json`. | Enforced by Claude Code, not our code; `CLAUDE.md` reworded (D2). The Equibles server has **write tools**: `CreateMyPortfolio`, `AddPortfolioLot`, `UpdatePortfolioLot`, `ClosePortfolioLot`, `RemovePortfolioLot`, `DeleteMyPortfolio`, `WatchInstrument`, `UnwatchInstrument`, `ReportProblem`, `SuggestToolImprovement`. All go on the deny list. |
 | **Decisions firewall** | Separate table; `Store.review_trail()` excludes it. | `decisions/` read by the middleware agent only; `permissions.deny` on that path for every subagent. | The middleware agent reads both decisions and agent briefs, so its prompt must never copy one into the other. Weaker than code. |
 | **Deterministic rules** | `rules.py` | **In prompts (D3).** The technical-analysis agent reads the investor profile and applies every rule in ARCHITECTURE.md §4 to its own plan, recording each result (pass / reject / flag, with the numbers) in its analysis. The middleware agent re-checks price order, max loss and reward:risk from the analysis before reporting. | Arithmetic by a model; the recorded numbers make a slip visible to evaluation. |
@@ -268,6 +278,7 @@ from reasoning review.
 
 | # | Decision |
 |---|---|
+| D1 | Backtests run through a gatekeeper agent (fetch + point-in-time filter) and an independent auditor agent; stage agents get no Equibles tools in backtests (§10). |
 | D2 | `CLAUDE.md` hard rules reworded for this design (tool allowlists in subagent definitions; `as_of` enforced by prompt and checked from `raw/`). |
 | D3 | Rules and outcome arithmetic move into prompts. The technical-analysis agent reads the investor profile (`~/.trading-platform/profile.json`, format of `profile.example.json`) and applies the rules; follow-up and evaluators read it for `level_trigger`. |
 | D4 | Agentic only for now. No side-by-side run with the Python pipeline. |
@@ -277,8 +288,6 @@ from reasoning review.
 
 - **D0. Your trade in evaluation:** the two-output split in §7 (recommended), or let
   feedback learn from your decisions (rewords a hard rule).
-- **D1. Backtests** (§10): no backtests, or prompt-disciplined backtests with a
-  look-ahead audit, marked unverified.
 
 ## 9. Suggested order
 
@@ -288,39 +297,110 @@ from reasoning review.
 4. Agent 5, `/trade`, positions.
 5. Evaluation and feedback prompts for every agent; `/evaluate`, `/feedback`,
    `/approve`.
+6. Backtest mode: gatekeeper, pit-auditor, `-backtest` agent variants, `/backtest`.
 
-## 10. Why backtesting is hard here
+## 10. Backtest mode (D1)
+
+### Why live-style agents can't backtest
 
 A backtest asks: "what would the agents have said on date X, knowing only what was
 public on X?" The Python pipeline makes that true in code: it fetches, then throws
-away anything dated after X before an agent sees it (`RawDataBundle.add`), counts
-statements from the day after filing, and delays macro values by their publication lag.
-
-With agents calling Equibles directly, three things break:
+away anything dated after X before an agent sees it. If stage agents call Equibles
+themselves, that breaks:
 
 1. **Many tools only answer "now".** `GetEtfHoldings` serves the latest holdings only;
    `ScreenStocks`, `GetValuationMultiples`, `GetAnalystEstimates`, `GetLiveQuote` and
-   `GetUpcomingInvestorEvents` return current values. An agent asked about 2026-03-01
-   gets today's shortlist, multiples and estimates.
+   `GetUpcomingInvestorEvents` return current values.
 2. **Tools that take dates still leak.** `GetStockPrices` is split-adjusted to today;
-   `GetFinancialFact` returns restatements filed later unless asked for as-reported
-   values and filtered by filing date; macro series are latest-revised. Code can filter
-   every row; a prompt can only ask the agent to, and one missed row is enough.
-3. **Nothing stops a later date.** A tool call with `to=today` is one mistake away, and
-   the result lands in the agent's context before any check.
+   `GetFinancialFact` includes later restatements unless asked for as-reported values
+   and filtered by filing date; macro series are latest-revised.
+3. **Nothing stops a later date.** One call with `to=today` puts the future into the
+   analyst's context before any check can run.
 
-A fourth problem applies to both designs: the model already knows what happened
-before its training cutoff (ARCHITECTURE.md §7), so only dates after the cutoff are
-honest evidence anyway.
+### Design: gatekeeper + auditor, analysts without data tools
 
-**What still works:**
+```mermaid
+sequenceDiagram
+    autonumber
+    participant MW as Middleware agent
+    participant GK as gatekeeper
+    participant AU as pit-auditor
+    participant ST as stage agent (-backtest)
+    MW->>GK: stage, subject, as_of, upstream analyses
+    GK->>GK: call Equibles, filter to as_of, write pack
+    MW->>AU: pack path, as_of
+    AU-->>MW: audit.md (clean | leaks)
+    alt leaks
+        MW->>GK: rebuild pack (audit attached), then re-audit
+    end
+    MW->>ST: pack path + upstream analyses
+    ST-->>MW: analysis.md (+ requests.md if it needs more data)
+    opt requests.md present (at most 2 rounds)
+        MW->>GK: extend pack with the requests
+        MW->>AU: re-audit
+        MW->>ST: rerun with the extended pack and its draft
+    end
+```
 
-- **Forward testing is unaffected.** Every live run is point-in-time by definition, and
-  the evaluation prompts grade those runs as outcomes arrive, including candidates
-  nobody traded. Over time that is the most honest evidence available.
-- **Prompt-disciplined backtests (option for D1).** Run with a past `as_of`; each agent
-  is told to request data only up to `as_of`, skip the "now only" tools (and record them
-  as data gaps), and use as-reported fundamentals by filing date. Afterwards, an audit
-  step scans every file in `raw/` for dates after `as_of` and marks the run
-  `point_in_time: verified` or lists the leaks. Split adjustment and macro revisions
-  can't be caught this way, so these results are "indicative", never proof.
+Claude Code subagents cannot launch other subagents, so the middleware agent relays
+every step. Separation of duties is the point:
+
+- **Stage agents (`<agent>-backtest`) have no Equibles tools.** They read only their
+  pack, upstream analyses from the same run, and the profile. Whatever mistake the
+  gatekeeper makes in a tool call, the analyst never sees the unfiltered response.
+- **The gatekeeper only fetches and filters.** It forms no opinion, so it has no reason
+  to use what it sees.
+- **The auditor is independent.** It sees only the pack and `as_of`, never the raw
+  responses, and checks every dated field.
+
+**Data pack** (`runs/<run_id>/packs/<stage>/<subject>/`):
+
+```
+manifest.md          one row per request: tool, parameters, rows kept, rows dropped
+                     (count and rule only, never the dropped content), gaps
+data/<tool>-<n>.json filtered rows, each with the date that made it visible
+gaps.md              what was refused or empty, and why (e.g. "now-only tool")
+audit.md             pit-auditor verdict: clean | leaks (field, file, date)
+```
+
+**Gatekeeper rules** (the same rules the Python adapters apply, now in its prompt):
+
+| Data | Tools | Backtest rule |
+|---|---|---|
+| Daily prices | `GetStockPrices` | Request with `to` = `as_of` date; drop later bars. A bar counts from 16:00 New York on its date. Note: levels are split-adjusted to today. |
+| Quotes | `GetLiveQuote`, `GetLatestClosingPrices` | **Never.** The last visible daily close stands in. |
+| Indicators | `GetAverageTrueRange`, `GetBollingerBands`, `GetStochasticOscillator`, `GetOnBalanceVolume` | Only if the tool takes an end date and every row is ≤ `as_of`; otherwise not served, and the analyst reads the bars. |
+| Fundamentals | `GetFinancialFact` (as-reported and restated, with filing dates) | Keep rows filed on an earlier New York day than `as_of`; per period the latest such filing wins. Per-share values dropped (they are on today's share basis). |
+| Other fundamentals | `GetFinancialStatement`, `GetGuidance`, `GetValuationMultiplesHistory`, `GetEarningsCallTranscript` | Served only when every row carries a date that can be checked; otherwise a gap. |
+| Filings and documents | `ListFilings`, `SearchDocument`, `ReadDocumentLines` | Filed on an earlier day than `as_of`; documents only from filings that pass. |
+| Press releases | `GetInvestorRelationsNews` | Published on an earlier day than `as_of`. |
+| FDA meetings | `GetFdaAdvisoryCommitteeMeetings` | Visible from 15 days before the meeting. |
+| Earnings date | `ListFilings` (8-K item 2.02 history) | Estimated from past cadence, `confirmed: false`. `GetUpcomingInvestorEvents` is never used. |
+| Macro | `GetEconomicIndicator`, `GetEconomicCalendar`, `GetVixHistory`, `GetPutCallRatios` | A value counts after its period ends plus the publication lag used in `data/equibles_macro.py`. Note: values are latest-revised. |
+| Sector constituents | `GetEtfHoldings` | Only if the served report was public (period + 60 days) by `as_of`; otherwise a gap, and the sector deep dive can't screen. `--allow-current-constituents` uses today's list and marks the run `survivorship-biased`. |
+| Now-only | `ScreenStocks`, `GetValuationMultiples`, `GetAnalystEstimates` | **Never.** Recorded as gaps. |
+
+**Other backtest rules:**
+
+- **Lessons as of the date.** Stage prompts use `lessons.md` as committed before
+  `as_of`, because a later lesson can describe what happened after it.
+- **Only earlier analyses.** Agent 5 and any agent reading past analyses see only runs
+  with an earlier `as_of`.
+- **Run label.** `run.md` gets `point_in_time: audited` when every pack passed, or
+  `leaks-found` with the list. Feedback ignores `leaks-found` runs.
+- **Evaluation right away.** Outcomes after `as_of` are already known, so the evaluator
+  grades a backtest as soon as it finishes. That is the fastest way to exercise the
+  evaluation and feedback prompts.
+
+### What it can't guarantee
+
+- **History Equibles doesn't keep:** split-adjusted price levels (percent moves are
+  right), latest-revised macro, latest-only ETF holdings. These are flagged, not fixed.
+- **The filter is a model.** A missed row is possible. The auditor makes it unlikely,
+  but that is not what code guarantees.
+- **The model's own memory.** It knows what happened before its training cutoff, so
+  only dates after the cutoff of every model used are honest evidence
+  (ARCHITECTURE.md §7).
+
+Forward testing (every live run, graded by the evaluators as outcomes arrive) stays the
+main evidence.

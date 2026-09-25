@@ -15,7 +15,8 @@ Hard rules:
   in `.claude/settings.json`.
 - User accept/reject decisions must never reach the process-review agent or any stage prompt.
 - Every run has an `as_of`; agent prompts must forbid using data dated after it, and every tool result an agent
-  used is kept in its `raw/` folder so this can be checked.
+  used is kept in its `raw/` folder so this can be checked. In backtests, stage agents get no data tools: only
+  the gatekeeper agent calls Equibles, and every data pack passes the pit-auditor before a stage agent reads it.
 
 Dev: `python -m venv .venv && . .venv/bin/activate && pip install -e '.[dev]' && pytest`
 Set `EQUIBLES_TEST_DSN` (a scratch UTF-8 Postgres database) to also run the Equibles SQL tests.
