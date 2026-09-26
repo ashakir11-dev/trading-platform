@@ -1,5 +1,6 @@
 ---
-description: Run the trading pipeline end to end and report (live, as of now)
+name: run
+description: Run the trading pipeline end to end and report (live, as of now). Use when the user asks for new trade ideas, a market scan or a full pipeline run.
 argument-hint: "[--max-sectors N] [--shortlist N]"
 model: claude-sonnet-5
 ---

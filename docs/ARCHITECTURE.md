@@ -51,7 +51,7 @@ Step-by-step runtime flow (sequence diagrams): [`sequence-diagrams.md`](sequence
 | Agent 1: Sector Deep Dive | `sector-deep-dive` | one per sector, in parallel | sector call + **bulk screen of the sector's companies** (ratios, size, prices, recent filings/events) + breadth, FDA, earnings | shortlist **ranked by potential score** |
 | Company Deep Dive | `company-deep-dive` | one per company, in parallel | shortlist entry + market/sector/macro data + **full company data** (fundamentals, filings, guidance, estimates, transcripts, insider and short data) | worthiness verdict; catalysts checked |
 | Technical Analysis | `technical-analysis` | one per company, in parallel, **no cross-comparison** | candidate + **investor profile** + price statistics, swing levels and weekly bars for the horizon's charts + earnings date | chart verdict + entry / stop / target / horizon / chart timeframe, or rejection; then the **profile's rules** |
-| Middleware | the commands in `.claude/commands/` | orchestrates | | report to the user; records the user's decisions |
+| Middleware | the `middleware` agent and its skills (`.claude/skills/`) | orchestrates | | report to the user; records the user's decisions |
 | Agent 5: Follow-Up | `follow-up` | on a schedule, per accepted position | position + profile + fresh data + every earlier analysis | tripwire checks (price vs stop/target, **material** news only) with a **12h alert cooldown**, plus a full re-review on alert or every 14 days |
 | Evaluation | `stage-evaluator` | per agent and past run | the agent's analyses + prices since | **outcome facts** (no judgment), then **reasoning-quality grades** with an attribution per miss |
 | Feedback | `stage-feedback` | per agent, on request | the agent's evaluations | proposed lessons; added to prompts only after the user approves |
@@ -252,7 +252,7 @@ evaluator can separate "bad reasoning" from "no data".
 
 Implemented as Claude Code subagents: see
 [`prompt-subagents-design.md`](prompt-subagents-design.md) for the layout (prompts,
-subagents, commands, hooks, workspace), how each principle above is enforced, the
+middleware agent, subagents, skills, hooks, workspace), how each principle above is enforced, the
 backtest mode and the per-agent models, and [`operations.md`](operations.md) for
 running it.
 

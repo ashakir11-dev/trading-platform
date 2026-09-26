@@ -56,9 +56,10 @@ flowchart TD
     MW -.write/read.-> DEC
 ```
 
-**Runtime.** Claude Code. The middleware agent is the main session, driven by slash
-commands (interactive, or headless with `claude -p "/run ..."` for cron). It launches
-each stage agent as a subagent. A subagent starts with a fresh context, so agents
+**Runtime.** Claude Code. The middleware agent is the main session: the `middleware`
+agent definition (`.claude/agents/middleware.md`, started with `trading-agent` or
+`claude --agent middleware`), driven by its skills (interactive, or headless with
+`trading-agent <skill>` for cron). It launches each stage agent as a subagent. A subagent starts with a fresh context, so agents
 within a stage stay independent (principle 1): each company agent sees only its own
 brief.
 
@@ -86,27 +87,36 @@ prompts/
   gatekeeper/role.md             backtest only: fetch + point-in-time filter (§10)
   pit-auditor/role.md            backtest only: independent check of each data pack (§10)
 
-.claude/agents/                  subagent definitions (frontmatter: name, description,
-  <agent>.md                       tools, model); default + isolation modes
+.claude/agents/                  agent definitions (frontmatter: name, description,
+  middleware.md                    tools, model); the main session, not a subagent
+  <agent>.md                       default + isolation modes
   <agent>-evaluator.md           evaluation mode (different tools)
   <agent>-feedback.md            feedback mode (no market-data tools)
   <agent>-backtest.md            backtest mode: no Equibles tools, reads its data pack
   gatekeeper.md                  the only backtest agent with Equibles tools
   pit-auditor.md                 Read on data packs only
 
-.claude/commands/                your entry points into the middleware agent
-  run.md                         /run [--max-sectors N] [--shortlist N]
-  backtest.md                    /backtest --as-of DATE [--max-sectors N] [--shortlist N]
-  run-agent.md                   /run-agent <agent> <subject> [--as-of DATE]
+.claude/skills/<skill>/SKILL.md  the middleware agent's actions; your entry points
+  setup                          /setup (machine check, workspace, profile; interactive)
+  status                         /status (read-only overview)
+  run                            /run [--max-sectors N] [--shortlist N]
+  backtest                       /backtest --as-of DATE [--max-sectors N] [--shortlist N]
+  run-agent                      /run-agent <agent> <subject> [--as-of DATE]
                                  (isolation; a past date runs in backtest mode)
-  decide.md                      /decide <candidate_id> accept|reject [note]
-  trade.md                       /trade <position_id> entered|exited <price> [date]
-  follow-up.md                   /follow-up                      (cron)
-  evaluate.md                    /evaluate [<agent>] [--since DATE]
-  feedback.md                    /feedback <agent>
-  approve.md                     /approve <agent> <proposal_id>
+  decide                         /decide <candidate_id> accept|reject [note]   (user only)
+  trade                          /trade <position_id> entered|exited <price> [date] (user only)
+  follow-up                      /follow-up                      (cron)
+  evaluate                       /evaluate [<agent>] [--since DATE]
+  feedback                       /feedback <agent>
+  approve                        /approve <agent> <proposal_id>  (user only)
 .claude/settings.json            Equibles MCP server, tool deny list (§7)
+trading_agent/                   the `trading-agent` launcher (interactive, headless per
+                                 skill, init, doctor); no pipeline logic
 ```
+
+`decide`, `trade` and `approve` set `disable-model-invocation`: they record the user's
+own decisions, trades and approvals, so only the user can run them; the agent can run
+every other skill when a request calls for it.
 
 Modes are separate subagent files because they need different tools: evaluation needs
 price data, feedback needs none. Each file's body tells the subagent to read
@@ -431,13 +441,13 @@ main evidence.
 
 ## 11. Running it
 
-**Models.** Each subagent file sets its `model` and `effort`; the commands (the
-middleware agent) set `model`, and headless runs pass `--effort low`. Claude Code's
+**Models.** Each agent file sets its `model` and `effort`, the middleware's included
+(`.claude/agents/middleware.md`); the skills set `model` too. Claude Code's
 default effort is `xhigh`, which the first runs used everywhere.
 
 | Agent | Model | Effort | Why |
 |---|---|---|---|
-| middleware (commands) | Sonnet 5 | low | Orchestration, forwarding rules, report |
+| middleware (agent + skills) | Sonnet 5 | low | Orchestration, forwarding rules, report |
 | market-scanner | Sonnet 5 | medium | Judgment on compact statistics |
 | sector-deep-dive | Sonnet 5 | low | Volume screening of ~25 companies |
 | company-deep-dive | Opus 5 | medium | The deepest judgment: filings, catalysts, risks |
@@ -452,38 +462,24 @@ default effort is `xhigh`, which the first runs used everywhere.
 Revisit these with the evaluations: if an agent's reasoning grades drop at its current
 setting, raise its effort before changing its model.
 
-Needs the Claude Code CLI, `ANTHROPIC_API_KEY` and `EQUIBLES_API_KEY` (the Equibles
-server is configured in `.mcp.json`, which reads the key from the environment).
+Needs Python 3.10+, `EQUIBLES_API_KEY` (the Equibles server is configured in
+`.mcp.json`, which reads the key from the environment) and `ANTHROPIC_API_KEY` or a
+Claude Code login. `scripts/bootstrap.sh` sets up a fresh clone; the `trading-agent`
+launcher brings Claude Code with it (bundled with the Claude Agent SDK). Setup and
+scheduling: [`operations.md`](operations.md).
 
-**Once per machine:** run `claude` interactively in the repository and accept the
-trust dialog and the `equibles` MCP server. Until then Claude Code ignores the
-project's permission allow rules. The hooks and deny rules apply either way.
+Interactive: `trading-agent` (or `claude --agent middleware`), then the skills (table in
+§3; the README describes each). On first start, accept the trust dialog and the
+`equibles` MCP server: until then Claude Code ignores the project's permission allow
+rules. The hooks and deny rules apply either way.
 
-Interactive: start `claude` in the repository and use the commands:
-
-| Command | What it does |
-|---|---|
-| `/run [--max-sectors N] [--shortlist N]` | Live run, all four stages, report |
-| `/run-agent <agent> <subject> [--as-of DATE]` | One agent on its own (a past date runs it as a backtest) |
-| `/decide <candidate_id> accept\|reject [note]` | Record your decision; accept opens a watched position |
-| `/trade <position_id> entered\|exited <price> [date]` | Record your actual entry or exit |
-| `/follow-up [position_id]` | Agent 5 tick over open positions (cron) |
-| `/evaluate [--run ID] [--agent A] [--min-days N]` | Grade past runs; your decision reviews in chat |
-| `/feedback <agent>` | Propose lessons from an agent's evaluations |
-| `/approve <agent> <proposal_id> [reject]` | Add a lesson to the agent's prompt (a commit) |
-| `/backtest --as-of DATE [...]` | The pipeline as of a past date, with audited data packs |
-
-Headless (cron):
-
-```sh
-CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS=0 \
-  claude -p "/run" --model claude-sonnet-5 --effort low \
-  --mcp-config .mcp.json --permission-mode acceptEdits
-```
-
-The environment variable keeps a headless run from killing agents that were started
-in the background after 10 minutes; the middleware prompt also launches every agent in
-the foreground.
+Headless (cron): `trading-agent <skill> [args]`, e.g. `trading-agent run`. It starts the
+middleware agent through the Claude Agent SDK with the project's settings, hooks and
+Equibles server, and passes the settings' allow and deny lists explicitly, so it works on
+a clone that was never opened interactively. It also sets
+`CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS=0`, which keeps a headless run from killing agents
+that were started in the background after 10 minutes; the middleware prompt also
+launches every agent in the foreground.
 
 Everything a run produces is under `workspace/`: `runs/<run_id>/report.md` first
 (and `report.html`, the same run as a page, rendered by `scripts/render_report.py`),

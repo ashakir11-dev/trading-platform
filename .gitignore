@@ -5,3 +5,5 @@ __pycache__/
 *.sqlite3
 .claude/worktrees/
 workspace/
+.env
+build/

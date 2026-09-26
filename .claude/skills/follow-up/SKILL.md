@@ -1,5 +1,6 @@
 ---
-description: One follow-up tick over every open position (for cron)
+name: follow-up
+description: One follow-up tick over every open position (for cron). Use when the user asks how their open positions are doing.
 argument-hint: "[position_id]"
 model: claude-sonnet-5
 ---

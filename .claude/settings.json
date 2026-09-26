@@ -6,6 +6,7 @@
     "allow": [
       "Agent",
       "Task",
+      "Skill",
       "Read(workspace/**)",
       "Edit(workspace/**)",
       "Bash(date:*)",
@@ -15,6 +16,7 @@
       "Bash(git rev-parse:*)",
       "Bash(git status:*)",
       "Bash(python3 scripts/render_report.py:*)",
+      "Bash(python3 -m trading_agent doctor:*)",
       "mcp__equibles__GetStockPrices",
       "mcp__equibles__GetLatestClosingPrices",
       "mcp__equibles__GetLiveQuote",

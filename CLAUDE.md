@@ -18,11 +18,14 @@ Hard rules:
   used is kept in its `raw/` folder so this can be checked. In backtests, stage agents get no data tools: only
   the gatekeeper agent calls Equibles, and every data pack passes the pit-auditor before a stage agent reads it.
 
-Subagent pipeline: prompts in `prompts/`, subagents and commands in `.claude/`, run data in git-ignored
-`workspace/`. `.claude/hooks/workspace_guard.py` enforces the decisions firewall, the read-only tool rule and
+Subagent pipeline: prompts in `prompts/`; the `middleware` main agent, the subagents and the skills (the
+middleware's actions) in `.claude/`; run data in git-ignored `workspace/`. `trading_agent/` is the standalone
+launcher (`trading-agent`: interactive, headless per skill, `init`, `doctor`); it only starts Claude Code with the
+project's configuration and holds no pipeline logic. Keep `tests/test_trading_agent.py` passing when changing it,
+an agent or a skill. `.claude/hooks/workspace_guard.py` enforces the decisions firewall, the read-only tool rule and
 raw-data capture, and turns price responses into statistics (`price_stats.py`, arithmetic only); keep
 `tests/test_workspace_guard.py` and `tests/test_price_stats.py` passing when changing them.
 `scripts/render_report.py` lays out the middleware's `report.json` as `report.html` (layout and plan distances
 only, no network); keep `tests/test_render_report.py` passing.
 
-Dev: `pip install pytest && pytest` (tests cover the hooks). Running the pipeline: `docs/operations.md`.
+Dev: `pip install -e ".[dev]" && pytest` (tests cover the hooks, the report renderer and the launcher). Running the pipeline: `docs/operations.md`.

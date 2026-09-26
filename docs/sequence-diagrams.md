@@ -1,6 +1,6 @@
 # Sequence diagrams
 
-How a run moves between agents. The **middleware agent** (the slash commands) launches
+How a run moves between agents. The **middleware agent** (the main session, driven by its skills) launches
 each subagent with a brief, never fetches data itself, and moves results along through
 the analysis folders in `workspace/`. Each subagent fetches its own data from
 Equibles; a hook saves every response to the agent's `raw/` folder. See

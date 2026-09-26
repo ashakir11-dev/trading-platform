@@ -1,5 +1,6 @@
 ---
-description: Grade past runs against what happened since (per agent), and review your own decisions
+name: evaluate
+description: Grade past runs against what happened since (per agent), and review your own decisions. Use when the user asks how past recommendations turned out.
 argument-hint: "[--run RUN_ID] [--agent AGENT] [--min-days N]"
 model: claude-sonnet-5
 ---

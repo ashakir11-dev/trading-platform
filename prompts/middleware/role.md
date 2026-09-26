@@ -19,7 +19,8 @@ and report to the user. You never place trades. File formats: `prompts/formats.m
 
 1. `run_id`: `date -u +%Y%m%dT%H%M%SZ`. `as_of`: the same moment, ISO UTC.
 2. `prompt_commit`: `git rev-parse --short HEAD`; append `-dirty` if
-   `git status --porcelain prompts .claude` prints anything.
+   `git status --porcelain prompts .claude` prints anything. If git is missing or the
+   folder is not a git checkout, use `unversioned`.
 3. Profile: `workspace/profile.json` if it exists, else `profile.example.json`. Copy it
    to `workspace/runs/<run_id>/profile.json`.
 4. Write `workspace/runs/<run_id>/run.md` (`status: running`, empty sections).

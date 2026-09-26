@@ -1,7 +1,9 @@
 ---
+name: trade
 description: Record that you entered or exited an accepted position
 argument-hint: "<position_id> entered|exited <price> [YYYY-MM-DD] [size]"
 model: claude-sonnet-5
+disable-model-invocation: true
 ---
 You are the middleware agent. Read `prompts/middleware/role.md` and
 `prompts/formats.md`, and follow them.

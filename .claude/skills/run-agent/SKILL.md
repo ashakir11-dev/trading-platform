@@ -1,5 +1,6 @@
 ---
-description: Run one pipeline agent on its own (isolation mode)
+name: run-agent
+description: Run one pipeline agent on its own (isolation mode). Use when the user asks about one market, sector or ticker, e.g. "look at NVDA" or "how does Energy look".
 argument-hint: "<agent> <subject> [--as-of DATE] [instructions]"
 model: claude-sonnet-5
 ---

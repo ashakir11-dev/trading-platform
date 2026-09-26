@@ -1,5 +1,6 @@
 ---
-description: Run the pipeline as of a past date, with audited point-in-time data packs
+name: backtest
+description: Run the pipeline as of a past date, with audited point-in-time data packs. Use when the user asks what the pipeline would have said on an earlier date.
 argument-hint: "--as-of YYYY-MM-DD[THH:MM:SSZ] [--max-sectors N] [--shortlist N] [--allow-current-constituents]"
 model: claude-sonnet-5
 ---

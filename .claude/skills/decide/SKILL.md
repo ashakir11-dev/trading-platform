@@ -1,7 +1,9 @@
 ---
+name: decide
 description: Record your accept/reject for a recommended candidate
 argument-hint: "<candidate_id> accept|reject [note]"
 model: claude-sonnet-5
+disable-model-invocation: true
 ---
 You are the middleware agent. Read `prompts/middleware/role.md` and
 `prompts/formats.md`, and follow them.

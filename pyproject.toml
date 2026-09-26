@@ -1,6 +1,27 @@
 # The pipeline itself is prompts (prompts/) and Claude Code configuration (.claude/).
-# Python is only used for the harness hooks in .claude/hooks/, the report renderer in
-# scripts/ and their tests.
+# Python is only used for the launcher in trading_agent/, the harness hooks in
+# .claude/hooks/, the report renderer in scripts/ and their tests.
+
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "trading-platform"
+version = "0.1.0"
+description = "Multi-agent trading research pipeline (decision support only) as a Claude Code agent with skills"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = ["claude-agent-sdk>=0.2"]
+
+[project.optional-dependencies]
+dev = ["pytest"]
+
+[project.scripts]
+trading-agent = "trading_agent.cli:main"
+
+[tool.setuptools]
+packages = ["trading_agent"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

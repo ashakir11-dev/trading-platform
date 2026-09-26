@@ -1,5 +1,6 @@
 ---
-description: Propose lessons for one agent from its evaluations
+name: feedback
+description: Propose lessons for one agent from its evaluations. Use when the user asks how an agent could improve.
 argument-hint: "<agent>"
 model: claude-sonnet-5
 ---
