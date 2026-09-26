@@ -52,8 +52,7 @@ def env_files(root: Path) -> list[Path]:
 def load_env(root: Path, environ: dict[str, str] | None = None) -> list[Path]:
     """Load ``.env`` at the root, then ``~/.trading-platform/env``, into ``environ``
     (default: ``os.environ``) without overriding what is already set; empty values are
-    skipped. Returns the
-    files that were read."""
+    skipped. Returns the files that were read."""
     environ = os.environ if environ is None else environ
     read = []
     for path in env_files(root):
