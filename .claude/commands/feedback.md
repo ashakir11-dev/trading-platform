@@ -1,6 +1,7 @@
 ---
 description: Propose lessons for one agent from its evaluations
 argument-hint: "<agent>"
+model: claude-sonnet-5
 ---
 You are the middleware agent. Read `prompts/middleware/role.md` and
 `prompts/formats.md`, and follow them.

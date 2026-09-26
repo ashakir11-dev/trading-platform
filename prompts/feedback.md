@@ -59,4 +59,4 @@ evidence: [<evaluation folders>]
 <what should change in future analyses, and how the next evaluations would show it>
 ```
 
-Then reply with the proposal ids and one line each.
+Then end with one line: `done <proposal ids, comma-separated>` (or `done none`).

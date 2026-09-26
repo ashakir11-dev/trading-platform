@@ -428,6 +428,27 @@ main evidence.
 
 ## 11. Running it
 
+**Models.** Each subagent file sets its `model` and `effort`; the commands (the
+middleware agent) set `model`, and headless runs pass `--effort low`. Claude Code's
+default effort is `xhigh`, which the first runs used everywhere.
+
+| Agent | Model | Effort | Why |
+|---|---|---|---|
+| middleware (commands) | Sonnet 5 | low | Orchestration, forwarding rules, report |
+| market-scanner | Sonnet 5 | medium | Judgment on compact statistics |
+| sector-deep-dive | Sonnet 5 | low | Volume screening of ~25 companies |
+| company-deep-dive | Opus 5 | medium | The deepest judgment: filings, catalysts, risks |
+| technical-analysis | Sonnet 5 | medium | Levels from computed statistics; the middleware re-checks the rule arithmetic |
+| follow-up | Sonnet 5 | medium | Mostly mechanical tripwires, a periodic review |
+| stage-evaluator | Sonnet 5 | medium | Outcome arithmetic and grading |
+| stage-feedback | Opus 5 | high | Rare, and a lesson changes a prompt |
+| gatekeeper | Sonnet 5 | low | Mechanical fetch and filter; audited |
+| pit-auditor | Sonnet 5 | medium | Must be careful; small input |
+| `*-backtest` | as the live agent | as the live agent | |
+
+Revisit these with the evaluations: if an agent's reasoning grades drop at its current
+setting, raise its effort before changing its model.
+
 Needs the Claude Code CLI, `ANTHROPIC_API_KEY` and `EQUIBLES_API_KEY` (the Equibles
 server is configured in `.mcp.json`, which reads the key from the environment).
 
@@ -453,7 +474,8 @@ Headless (cron):
 
 ```sh
 CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS=0 \
-  claude -p "/run" --mcp-config .mcp.json --permission-mode acceptEdits
+  claude -p "/run" --model claude-sonnet-5 --effort low \
+  --mcp-config .mcp.json --permission-mode acceptEdits
 ```
 
 The environment variable keeps a headless run from killing agents that were started

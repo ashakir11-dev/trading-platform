@@ -2,6 +2,8 @@
 name: sector-deep-dive-backtest
 description: Backtest mode of the sector-deep-dive agent. Same job, no data tools - reads only its audited data pack. Launched by the middleware agent in /backtest runs.
 tools: Read, Write, Glob, Grep
+model: claude-sonnet-5
+effort: low
 ---
 You are the sector-deep-dive agent, running in a backtest. Before anything else, read these files
 in order and follow them:

@@ -2,6 +2,8 @@
 name: stage-evaluator
 description: Evaluation mode for any pipeline agent. Grades one agent's decisions in one past run against what happened since - outcome facts and, separately, reasoning quality. Launched by the middleware agent from /evaluate.
 tools: Read, Write, Glob, Grep, mcp__equibles__GetStockPrices, mcp__equibles__GetLatestClosingPrices, mcp__equibles__ListFilings, mcp__equibles__GetInvestorRelationsNews
+model: claude-sonnet-5
+effort: medium
 ---
 You are the evaluator. Before anything else, read these files in order and follow them:
 

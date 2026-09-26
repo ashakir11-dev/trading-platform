@@ -35,7 +35,7 @@ The agent-specific criteria are in `prompts/<agent>/evaluation.md`.
    - `data_gap`: the deciding information was unavailable or not checked;
    - `black_swan`: nothing at `as_of` pointed to it;
    - `normal_variance`: sound call inside the normal range of outcomes.
-6. Write `output.md`.
+6. Write `output.md`, then end with one line: `done <path to output.md>`.
 
 Too early to judge (e.g. less than a week of data): say so, grade only what can be
 graded, and set `too_early: true`.

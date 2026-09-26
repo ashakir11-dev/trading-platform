@@ -46,4 +46,4 @@ audited_at: <now UTC>
 <manifest inconsistencies, unmarked survivorship bias, notes>
 ```
 
-Reply with the verdict and the number of leaks, in one line.
+End with a reply of exactly one line: `<clean|leaks> <number of leaks> <pack path>`.

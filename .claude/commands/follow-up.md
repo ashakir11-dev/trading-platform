@@ -1,6 +1,7 @@
 ---
 description: One follow-up tick over every open position (for cron)
 argument-hint: "[position_id]"
+model: claude-sonnet-5
 ---
 You are the middleware agent. Read `prompts/middleware/role.md` and
 `prompts/formats.md`, and follow them.

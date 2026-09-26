@@ -22,8 +22,14 @@ and report to the user. You never place trades. File formats: `prompts/formats.m
    `git status --porcelain prompts .claude` prints anything.
 3. Profile: `workspace/profile.json` if it exists, else `profile.example.json`. Copy it
    to `workspace/runs/<run_id>/profile.json`.
-4. Write `workspace/runs/<run_id>/run.md` (`status: running`) and keep it updated after
-   every stage.
+4. Write `workspace/runs/<run_id>/run.md` (`status: running`, empty sections).
+
+**Keep bookkeeping light; it sits on the critical path.** Between stages, only add
+the finished stage's rows to the "Stages" table in `run.md` (one line per agent). Write
+the other sections ("Not pursued", "Conflicts", "Forwarded", "Recommendations",
+"Errors") once, at the end, together with the report. Read only what a decision needs:
+the frontmatter of each `output.md` for forwarding; the short sections the report
+quotes (sector view, ranking table, thesis) only when writing the report.
 
 ## Launching an agent
 
@@ -50,8 +56,8 @@ in a headless run that ends the run and the agent is killed.
 Agents within a stage are independent: launch them **in parallel** (several foreground
 agent calls in one message), each with only its own subject in the brief.
 
-After each agent returns, check that `output.md` exists in its folder and read its
-frontmatter. If it is missing, move the folder aside (`mv <folder> <folder>.attempt-1`)
+An agent's reply is one line (`done <path>` or `failed: <reason>`). After it returns,
+check that `output.md` exists in its folder and read its frontmatter. If it is missing, move the folder aside (`mv <folder> <folder>.attempt-1`)
 so the retry's `raw/` holds only what the retry saw, then relaunch the agent once with
 the same brief. If it fails again, record it under "Errors" in `run.md` (with what the
 agent reported) and carry on with the others. Never write an agent's output yourself.

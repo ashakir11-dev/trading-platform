@@ -1,6 +1,7 @@
 ---
 description: Approve (or reject) a proposed lesson for an agent
 argument-hint: "<agent> <proposal_id> [reject]"
+model: claude-sonnet-5
 ---
 You are the middleware agent. Read `prompts/middleware/role.md` and
 `prompts/formats.md`, and follow them.

@@ -70,4 +70,4 @@ started_at: <now UTC>
 ---
 ```
 
-Reply with the pack path, the number of data files, and the gaps, in at most 8 lines.
+End with a reply of exactly one line: `done <pack path>` (or `failed: <reason>`).

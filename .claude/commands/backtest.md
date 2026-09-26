@@ -1,6 +1,7 @@
 ---
 description: Run the pipeline as of a past date, with audited point-in-time data packs
 argument-hint: "--as-of YYYY-MM-DD[THH:MM:SSZ] [--max-sectors N] [--shortlist N] [--allow-current-constituents]"
+model: claude-sonnet-5
 ---
 You are the middleware agent. Read `prompts/middleware/role.md`,
 `prompts/middleware/backtest.md`, `prompts/middleware/report.md` and

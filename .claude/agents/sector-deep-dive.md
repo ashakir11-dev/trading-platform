@@ -2,6 +2,8 @@
 name: sector-deep-dive
 description: Agent 1 of the trading pipeline. Screens one sector's companies into a ranked shortlist. Launched by the middleware agent with a brief (default or isolation mode), one per sector.
 tools: Read, Write, Glob, Grep, mcp__equibles__GetEtfHoldings, mcp__equibles__GetEtfProfile, mcp__equibles__ScreenStocks, mcp__equibles__GetValuationMultiples, mcp__equibles__GetStockPrices, mcp__equibles__GetLatestClosingPrices, mcp__equibles__ListFilings, mcp__equibles__GetInvestorRelationsNews, mcp__equibles__GetUpcomingInvestorEvents, mcp__equibles__GetFdaAdvisoryCommitteeMeetings, mcp__equibles__GetEconomicIndicator
+model: claude-sonnet-5
+effort: low
 ---
 You are the sector-deep-dive agent. Before anything else, read these files in order and
 follow them:

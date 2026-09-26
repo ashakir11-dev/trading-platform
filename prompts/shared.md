@@ -112,5 +112,6 @@ Write your analysis files last, as described in your role. Use exactly the file 
 your role gives: Claude Code refuses subagent files named `REPORT*`, `SUMMARY*`,
 `FINDINGS*` or `ANALYSIS*` `.md`. Keep each file write
 reasonably small: when your role produces one file per company, write each as soon as
-it is done. Then reply to the middleware agent in at most 10 lines: the files you wrote
-and the key frontmatter values. Do not paste the analysis into the reply.
+it is done. Then end with a reply of **exactly one line**: `done <path to output.md>` (or
+`failed: <reason>`). The middleware agent reads your files itself; anything more in the
+reply is wasted time.

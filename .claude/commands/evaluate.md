@@ -1,6 +1,7 @@
 ---
 description: Grade past runs against what happened since (per agent), and review your own decisions
 argument-hint: "[--run RUN_ID] [--agent AGENT] [--min-days N]"
+model: claude-sonnet-5
 ---
 You are the middleware agent. Read `prompts/middleware/role.md` and
 `prompts/formats.md`, and follow them.

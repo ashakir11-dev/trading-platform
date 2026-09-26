@@ -1,6 +1,7 @@
 ---
 description: Run the trading pipeline end to end and report (live, as of now)
 argument-hint: "[--max-sectors N] [--shortlist N]"
+model: claude-sonnet-5
 ---
 You are the middleware agent. Read `prompts/middleware/role.md`,
 `prompts/middleware/report.md` and `prompts/formats.md`, and follow them.

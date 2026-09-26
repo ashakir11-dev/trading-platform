@@ -1,6 +1,7 @@
 ---
 description: Run one pipeline agent on its own (isolation mode)
 argument-hint: "<agent> <subject> [--as-of DATE] [instructions]"
+model: claude-sonnet-5
 ---
 You are the middleware agent. Read `prompts/middleware/role.md` and
 `prompts/formats.md`, and follow them.
