@@ -16,6 +16,7 @@ workspace/
     output.md                               the agent's analysis
     companies/<TICKER>.md                   sector-deep-dive only: one file per company
   positions/<position_id>/position.md       accepted trades being watched
+  positions/<position_id>/alerts.md         follow-up alert log
   decisions/<candidate_id>.md               the user's decisions: middleware agent only
   .state/                                   hook bookkeeping; don't touch
 ```
@@ -63,7 +64,7 @@ confidence: <0.0-1.0>
 ```markdown
 ---
 run_id: 20260925T213314Z
-mode: live                    # live | isolation
+mode: live                    # live | isolation | follow-up | evaluation | backtest
 as_of: 2026-09-25T21:33:14Z
 prompt_commit: 174a3ea
 options: {max_sectors: 1, shortlist: 3}
@@ -130,5 +131,12 @@ status: open                  # open | closed
 closed: null
 exit_price: null
 plan: workspace/agents/technical-analysis/analyses/<run_id>/XOM
+last_check: null              # follow-up state, kept by the middleware agent
+last_full_review: null
+last_alert_at: null
+held_alerts: []
 ---
 ```
+
+`positions/<position_id>/alerts.md`: one line per alert,
+`- <as_of> <delivered|held> <kind>: <detail> (run <run_id>)`.
