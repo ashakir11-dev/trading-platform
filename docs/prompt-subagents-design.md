@@ -225,15 +225,15 @@ listed in the mode table above.
 | Agent | Equibles tools (default / isolation) |
 |---|---|
 | market-scanner | `GetStockPrices`, `GetLatestClosingPrices`, `GetEconomicIndicator`, `GetLatestEconomicIndicators`, `GetEconomicCalendar`, `GetVixHistory`, `GetPutCallRatios` |
-| sector-deep-dive | `GetEtfHoldings`, `GetStockPrices`, `ScreenStocks`, `GetValuationMultiples`, `ListFilings`, `GetFdaAdvisoryCommitteeMeetings`, `GetUpcomingInvestorEvents` |
-| company-deep-dive | `GetFinancialFact`, `GetFinancialStatement`, `ListFilings`, `SearchDocument`, `ReadDocumentLines`, `GetInvestorRelationsNews`, `GetGuidance`, `GetAnalystEstimates`, `GetEarningsCallTranscript`, `GetUpcomingInvestorEvents` |
-| technical-analysis | `GetStockPrices`, `GetLiveQuote`, `GetLatestClosingPrices`, `GetAverageTrueRange`, `GetBollingerBands`, `GetStochasticOscillator`, `GetOnBalanceVolume`, `GetUpcomingInvestorEvents` |
-| follow-up (Agent 5) | `GetLiveQuote`, `GetStockPrices`, `ListFilings`, `GetInvestorRelationsNews`, plus `Read` on **all** of `agents/` and `positions/`, not on `decisions/` (§7) |
+| sector-deep-dive | `GetEtfHoldings`, `GetEtfProfile`, `ScreenStocks`, `GetValuationMultiples`, `GetStockPrices`, `GetLatestClosingPrices`, `ListFilings`, `GetInvestorRelationsNews`, `GetUpcomingInvestorEvents`, `GetFdaAdvisoryCommitteeMeetings`, `GetEconomicIndicator` |
+| company-deep-dive | `GetFinancialFact`, `GetFinancialStatement`, `ListFilings`, `SearchDocument`, `ReadDocumentLines`, `GetGuidance`, `GetAnalystEstimates`, `GetEarningsCallTranscript`, `GetInvestorRelationsNews`, `GetUpcomingInvestorEvents`, `GetValuationMultiples`, `GetValuationMultiplesHistory`, `GetInsiderTransactions`, `GetShortInterest`, `GetDebtProfile`, `GetGoingConcernStatus`, `GetEconomicIndicator` |
+| technical-analysis | `GetStockPrices`, `GetLiveQuote`, `GetLatestClosingPrices`, `GetAverageTrueRange`, `GetBollingerBands`, `GetStochasticOscillator`, `GetOnBalanceVolume`, `GetUpcomingInvestorEvents`, `ListFilings` |
+| follow-up (Agent 5) | `GetStockPrices`, `GetLiveQuote`, `GetLatestClosingPrices`, `ListFilings`, `GetInvestorRelationsNews`, `GetUpcomingInvestorEvents`, `SearchDocument`, `ReadDocumentLines`, `GetFinancialStatement`, `GetGuidance`, plus `Read` on **all** of `agents/` and `positions/`, not on `decisions/` (§7) |
 | middleware | none directly; launches the agents, reads/writes `runs/` and `decisions/` |
 
-Evaluator subagents get only `GetStockPrices` / `GetLatestClosingPrices`. Feedback
-subagents get no Equibles tools. Today `technicals.py` computes indicators and pivots
-locally; here the agent uses the Equibles indicator tools and reads levels from the bars.
+The evaluator gets `GetStockPrices`, `GetLatestClosingPrices`, `ListFilings` and
+`GetInvestorRelationsNews`. The feedback agent gets no Equibles tools. The technical agent reads levels from the price statistics (swing levels, weekly
+bars, ATR14) and calls the Equibles indicator tools only when a setup depends on one.
 
 ## 7. Against the current principles and hard rules
 
@@ -401,7 +401,8 @@ audit.md             pit-auditor verdict: clean | leaks (field, file, date)
 | Earnings date | `ListFilings` (8-K item 2.02 history) | Estimated from past cadence, `confirmed: false`. `GetUpcomingInvestorEvents` is never used. |
 | Macro | `GetEconomicIndicator`, `GetEconomicCalendar`, `GetVixHistory`, `GetPutCallRatios` | A value counts after its period ends plus the publication lag used in `data/equibles_macro.py`. Note: values are latest-revised. |
 | Sector constituents | `GetEtfHoldings` | Only if the served report was public (period + 60 days) by `as_of`; otherwise a gap, and the sector deep dive can't screen. `--allow-current-constituents` uses today's list and marks the run `survivorship-biased`. |
-| Now-only | `ScreenStocks`, `GetValuationMultiples`, `GetAnalystEstimates` | **Never.** Recorded as gaps. |
+| Debt and going concern | `GetDebtProfile`, `GetGoingConcernStatus` | Only rows tied to a filing made on an earlier day than `as_of`; otherwise a gap. |
+| Now-only | `ScreenStocks`, `GetValuationMultiples`, `GetAnalystEstimates`, `GetEtfProfile`, `GetLatestEconomicIndicators` | **Never.** Recorded as gaps. |
 
 **Other backtest rules:**
 

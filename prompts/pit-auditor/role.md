@@ -22,7 +22,8 @@ Your brief names the pack folder and `as_of`. The rules the pack must follow are
    - Text inside documents or transcripts that reports a later event or later numbers.
 2. No data from a tool the rules say never to use (`GetLiveQuote`,
    `GetLatestClosingPrices`, `ScreenStocks`, `GetValuationMultiples`,
-   `GetAnalystEstimates`, `GetUpcomingInvestorEvents`).
+   `GetAnalystEstimates`, `GetUpcomingInvestorEvents`, `GetEtfProfile`,
+   `GetLatestEconomicIndicators`).
 3. `manifest.md` and `gaps.md` are consistent with the files (every data file listed, no
    listed file missing).
 4. Per-share fundamentals were dropped; `survivorship-biased` is marked where current

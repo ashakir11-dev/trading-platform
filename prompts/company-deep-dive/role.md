@@ -19,6 +19,9 @@ Decide whether **one company** is fundamentally worth pursuing in the stated dir
 
 ## Data to gather
 
+Send steps 1 and 3-6 together in one message. Read documents (step 2's `SearchDocument`,
+`ReadDocumentLines`) once `ListFilings` shows which filings matter.
+
 1. **Fundamentals** (`GetFinancialFact`, `GetFinancialStatement`): at least the last 8
    quarters and 3 fiscal years of revenue, gross and operating margin, net income,
    operating cash flow, free cash flow, cash, debt and shares outstanding. Prefer the

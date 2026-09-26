@@ -31,16 +31,19 @@ Read entry, stop and target from the **primary** chart; use the context chart fo
 trend. `GetStockPrices` is daily only (at most 500 rows per call); each response comes
 back as statistics plus swing highs/lows and the weekly bars built from it. For
 `long_term`, fetch 5 years as three date-ranged calls of about 20 months each, in one
-message.
+message. Each call is summarised on its own: take returns, moving averages, range and
+ATR from the most recent call only, and read the weekly bars and swing levels of all
+three in date order as one chart.
 
 ## Data to gather
 
 Send steps 1-4 together in one message.
 
 1. **Bars** (`GetStockPrices`) for the charts your horizon needs, up to `as_of`.
-2. **Indicators** as useful (ATR14 is already in the price statistics): `GetAverageTrueRange` (volatility, stop distance),
-   `GetBollingerBands`, `GetStochasticOscillator`, `GetOnBalanceVolume`. Or compute
-   them from the bars, showing the inputs.
+2. **Indicators** only when the setup depends on one: `GetBollingerBands`,
+   `GetStochasticOscillator`, `GetOnBalanceVolume`. They return full series, so skip
+   them otherwise. ATR14 is in the price statistics: don't call `GetAverageTrueRange`
+   for it.
 3. **Current price** for the stale-entry rule: `GetLiveQuote` (15-min delayed on Plus);
    if unavailable, the last close (`GetLatestClosingPrices`), and say which.
 4. **Next earnings:** from the company deep dive's `next_earnings` if given; otherwise
