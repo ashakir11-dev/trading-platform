@@ -141,3 +141,48 @@ def test_agents_that_need_bars_get_them_unchanged(project, agent_type):
     response = [{"type": "text", "text": table(list(range(1, 61)))}]
     assert guard.post(_event(project, "mcp__equibles__GetStockPrices", {"ticker": "T"}, agent_type, response)) is None
     assert (project / FOLDER / "raw" / "001-GetStockPrices.json").exists()
+
+
+# -- backtest data packs ------------------------------------------------------------------
+
+PACK = "workspace/runs/r1/packs/market-scanner/market"
+
+
+def _gk(project, tool, args, response=None, agent_type="gatekeeper"):
+    return _event(project, tool, args, agent_type, response)
+
+
+def test_gatekeeper_raw_is_private_and_prices_are_cut_at_as_of(project):
+    # as_of = 2025-12-03 18:00 UTC = 13:00 New York: the Dec 3 bar has not closed yet.
+    guard.post(_gk(project, "Write", {"file_path": f"{PACK}/claim.md"}))
+    (project / PACK).mkdir(parents=True)
+    (project / PACK / "claim.md").write_text("---\nas_of: 2025-12-03T18:00:00Z\n---\n")
+    response = [{"type": "text", "text": table([10, 11, 12, 13, 14])}]  # Dec 1..5
+    assert guard.post(_gk(project, "mcp__equibles__GetStockPrices", {"ticker": "T"}, response)) is None
+
+    assert (project / "workspace/runs/r1/.gatekeeper/market-scanner/market/raw/001-GetStockPrices.json").exists()
+    assert not (project / PACK / "raw").exists()
+    copied = (project / PACK / "data" / "001-GetStockPrices.md").read_text()
+    assert "| 2025-12-02 |" in copied and "| 2025-12-03 |" not in copied
+    assert "3 bars after as_of" in copied
+    assert "Last close: 11.00 on 2025-12-02" in copied
+
+
+@pytest.mark.parametrize("agent_type", ["market-scanner-backtest", "pit-auditor"])
+@pytest.mark.parametrize("tool,args", [
+    ("Read", {"file_path": "workspace/runs/r1/.gatekeeper/market-scanner/market/raw/001-GetStockPrices.json"}),
+    ("Glob", {"pattern": "**/*.json", "path": "workspace/runs/r1"}),
+    ("Glob", {"pattern": "workspace/runs/*/.gatekeeper/**"}),
+    ("Grep", {"pattern": "Close", "path": "workspace/runs"}),
+])
+def test_backtest_agents_cannot_read_unfiltered_data(project, agent_type, tool, args):
+    assert "unfiltered backtest data" in guard.pre(_event(project, tool, args, agent_type))
+
+
+@pytest.mark.parametrize("tool,args", [
+    ("Read", {"file_path": f"{PACK}/data/001-GetStockPrices.md"}),
+    ("Glob", {"pattern": "*.md", "path": f"{PACK}/data"}),
+    ("Read", {"file_path": "workspace/agents/market-scanner/analyses/r1/market/output.md"}),
+])
+def test_backtest_agents_can_read_their_pack(project, tool, args):
+    assert guard.pre(_event(project, tool, args, "sector-deep-dive-backtest")) is None

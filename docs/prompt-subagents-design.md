@@ -274,6 +274,8 @@ per-agent rules possible. They hold no pipeline logic.
 | PreToolUse | A subagent's data calls are blocked until it has written `claim.md` in its analysis folder. |
 | PostToolUse | The first write inside `workspace/agents/<agent>/analyses/<run>/<subject>/` claims that folder for the subagent. |
 | PostToolUse | Every Equibles response a subagent receives is saved verbatim to `<folder>/raw/NNN-<Tool>.json`. Raw data travels with the analysis without the agent re-typing it, and evaluation sees exactly what the agent saw. |
+| PreToolUse | `*-backtest` agents and the `pit-auditor` can't read `runs/<run>/.gatekeeper/` (the gatekeeper's unfiltered responses); searches must stay inside a pack or analysis folder. |
+| PostToolUse | Gatekeeper responses are saved to `runs/<run>/.gatekeeper/<stage>/<subject>/raw/`, not into the pack. A `GetStockPrices` response is copied into the pack with every bar that hadn't closed (16:00 New York) by `as_of` removed: a mechanical filter on top of the gatekeeper's own and the auditor's check. |
 | PostToolUse | A `GetStockPrices` response (up to 500 daily rows) is replaced, for the agent, by statistics computed from it (`.claude/hooks/price_stats.py`): returns with their base closes, 20/50/200-day averages, 52-week range, ATR14, dollar volume; for the technical agent also swing highs/lows and weekly bars. The full rows stay in `raw/`. This is arithmetic only: it keeps the agents' context small (a 500-row response becomes ~1K characters), makes the numbers exact, and removes the slowest part of a run. |
 
 | Rule / principle | Today (code) | This design | Gap |
@@ -316,7 +318,7 @@ from reasoning review.
    `/approve`.
 6. Backtest mode: gatekeeper, pit-auditor, `-backtest` agent variants, `/backtest`.
 
-**Built so far:** steps 1-5 (see §11).
+**Built so far:** steps 1-6 (see §11).
 
 ## 10. Backtest mode (D1)
 
@@ -433,8 +435,19 @@ server is configured in `.mcp.json`, which reads the key from the environment).
 trust dialog and the `equibles` MCP server. Until then Claude Code ignores the
 project's permission allow rules. The hooks and deny rules apply either way.
 
-Interactive: start `claude` in the repository and use `/run --max-sectors 1 --shortlist 3`,
-`/run-agent sector-deep-dive "Energy" upside`, `/decide <candidate_id> accept "note"`.
+Interactive: start `claude` in the repository and use the commands:
+
+| Command | What it does |
+|---|---|
+| `/run [--max-sectors N] [--shortlist N]` | Live run, all four stages, report |
+| `/run-agent <agent> <subject> [--as-of DATE]` | One agent on its own (a past date runs it as a backtest) |
+| `/decide <candidate_id> accept\|reject [note]` | Record your decision; accept opens a watched position |
+| `/trade <position_id> entered\|exited <price> [date]` | Record your actual entry or exit |
+| `/follow-up [position_id]` | Agent 5 tick over open positions (cron) |
+| `/evaluate [--run ID] [--agent A] [--min-days N]` | Grade past runs; your decision reviews in chat |
+| `/feedback <agent>` | Propose lessons from an agent's evaluations |
+| `/approve <agent> <proposal_id> [reject]` | Add a lesson to the agent's prompt (a commit) |
+| `/backtest --as-of DATE [...]` | The pipeline as of a past date, with audited data packs |
 
 Headless (cron):
 

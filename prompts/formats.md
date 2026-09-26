@@ -10,6 +10,9 @@ workspace/
     run.md                                  run manifest (middleware agent)
     profile.json                            the profile used by this run
     report.md                               the report shown to the user
+    lessons/<agent>.md                      backtests: each agent's lessons as of as_of
+    packs/<stage>/<subject>/                backtests: audited data pack (claim, data/, gaps, manifest, audit)
+    .gatekeeper/<stage>/<subject>/raw/      backtests: the gatekeeper's unfiltered responses (hook-protected)
   agents/<agent>/analyses/<run_id>/<subject>/
     claim.md                                written first by the agent
     raw/NNN-<Tool>.json                     every Equibles response, saved by a hook
