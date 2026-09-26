@@ -169,6 +169,9 @@ worst; without tranches there is one fill state, `e`.
 
 Outcomes: `pass`, `flag` (kept, the user is warned) or `reject`.
 
+**No plan** (`plan: null`, no chart setup to plan): write `rules: []` and `reward:
+null`; always include both keys, so every output has the same fields.
+
 ## Output
 
 Write `<analysis_folder>/output.md`. Common frontmatter (see `prompts/formats.md`),
