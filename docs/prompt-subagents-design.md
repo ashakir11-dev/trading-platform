@@ -1,11 +1,13 @@
-# Proposal: the pipeline as prompt-based subagents
+# The pipeline as prompt-based subagents
 
-**Status: direction chosen (2026-09-25), being specified.** The system moves to
-prompt-based subagents only (D4). The Python pipeline stays in the repo, unused, until
-this replaces it; nothing is deleted. This document describes an alternative build
-in which each stage is a prompt-defined subagent that fetches its own data. It also
-lists what that costs against the principles in [ARCHITECTURE.md](ARCHITECTURE.md)
-and names the decisions needed before any of it is built.
+**Status: built and running (2026-09-26).** The system is prompt-based subagents only
+(D4); the earlier Python pipeline was removed on 2026-09-26 (it is in git history). The
+"Today (code)" column in §7 describes that Python version, for comparison.
+
+This document describes how the pipeline is built: each stage is a prompt-defined
+subagent that fetches its own data. It also lists what that costs against the
+principles in [ARCHITECTURE.md](ARCHITECTURE.md), how the hooks enforce the critical
+rules, and the decisions taken (§8).
 
 Direction from the user (2026-09-25):
 

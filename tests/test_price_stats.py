@@ -186,3 +186,13 @@ def test_backtest_agents_cannot_read_unfiltered_data(project, agent_type, tool, 
 ])
 def test_backtest_agents_can_read_their_pack(project, tool, args):
     assert guard.pre(_event(project, tool, args, "sector-deep-dive-backtest")) is None
+
+
+def test_parses_a_real_equibles_response_without_adj_close():
+    """A captured hosted response (tests/fixtures/equibles_live/GetStockPrices.md)."""
+    text = (Path(__file__).parent / "fixtures" / "equibles_live" / "GetStockPrices.md").read_text()
+    title, bars = ps.parse(text)
+    assert title == "Daily prices for AAPL (Apple Inc.):"
+    assert [b.day.isoformat() for b in bars][-1] == "2026-09-24" and len(bars) == 5
+    assert bars[0].volume == 86_588_203
+    assert "1w n/a (only 5 bars)" in ps.summary(text, raw_file="r.json")

@@ -1,151 +1,147 @@
 # Operating the pipeline
 
-How to configure, run and operate the system day to day with the `trading-pipeline`
-command. It is **decision support only**: no command places, changes or cancels an
-order. `decide` and `close` only *record* what you decided or did. Your decisions are
-stored apart from the system's records and never reach any agent.
+How to set up, run and operate the system day to day. It is **decision support only**:
+no command places, changes or cancels an order. `/decide` and `/trade` only *record*
+what you decided or did. Your decisions are stored apart from everything the agents
+read, and a hook blocks every agent from them.
 
-## 1. Install
+The design behind this is in [`prompt-subagents-design.md`](prompt-subagents-design.md).
 
-```sh
-python -m venv .venv && . .venv/bin/activate
-pip install -e '.[equibles]'     # adds the MCP client used to reach Equibles
-trading-pipeline --help          # or: python -m trading_pipeline --help
-```
+## 1. Set up
 
-## 2. Configure
+- The [Claude Code](https://code.claude.com) CLI.
+- `ANTHROPIC_API_KEY` for the agents.
+- `EQUIBLES_API_KEY` for market data. The Plus plan or better: a full run makes a few
+  hundred data calls (the Free plan allows 100 a day), and Plus turns on live quotes.
 
-| Setting | Environment variable | Flag | Default |
-|---|---|---|---|
-| Equibles API key (market data) | `EQUIBLES_API_KEY` | | required for `run`, `follow-up`, `review` |
-| Anthropic API key (agents) | `ANTHROPIC_API_KEY` | | required for `run`, `follow-up`, `review` |
-| Database | `TRADING_DB` | `--db` | `~/.trading-platform/pipeline.sqlite3` (directory is created) |
-| Investor profile | `TRADING_PROFILE` | `--profile` | built-in default profile |
-| Model override | `TRADING_MODEL` | `--model` | `LLMConfig.model` |
-| Effort override | `TRADING_EFFORT` | `--effort` | `LLMConfig.effort` |
-
-Flags win over environment variables. The Anthropic key is read by the SDK itself;
-the CLI only checks that it is set. Store-only commands (`report`, `decide`,
-`positions`, `close`, `notes`, `approve-note`, `profile`) need no keys.
-
-Keep keys out of shell history and the repo, e.g. in `~/.trading-platform/env`
-(`chmod 600`):
+Keep the keys out of shell history and the repository, e.g. in
+`~/.trading-platform/env` (`chmod 600`):
 
 ```sh
-export EQUIBLES_API_KEY=...
 export ANTHROPIC_API_KEY=...
-export TRADING_PROFILE=~/.trading-platform/profile.json
+export EQUIBLES_API_KEY=...
 ```
 
-**Profile.** Copy `profile.example.json`, edit it (risk tolerance, horizons, shorts,
-max loss, reward:risk, `level_trigger`, notes; see ARCHITECTURE.md §4), then check it:
+**Once per machine:** start `claude` in the repository and accept the trust dialog and
+the `equibles` MCP server (`.mcp.json`). Until then Claude Code ignores the project's
+permission allow rules; the hooks and deny rules apply either way.
 
-```sh
-trading-pipeline profile validate ~/.trading-platform/profile.json
-trading-pipeline profile show        # the profile the pipeline will actually use
+**Profile.** Copy `profile.example.json` to `workspace/profile.json` and edit it: risk
+tolerance, horizons, shorts, max loss, reward:risk, `level_trigger`, notes (see
+ARCHITECTURE.md §4). Without it, the example profile is used. Each run copies the
+profile it used into its run folder.
+
+**Models.** Each agent's model and effort are set in its file in `.claude/agents/`; the
+table and the reasoning are in the design doc (§11).
+
+## 2. First run
+
+Inside `claude` in the repository:
+
+```
+/run --max-sectors 1 --shortlist 3
 ```
 
-**Data.** All data comes from the hosted Equibles MCP server through one read-only
-client whose tool allowlist is the union of the tools of the adapters that are
-installed. A data category whose adapter module is not installed yet falls back to
-its gap placeholder: the run still works, the CLI logs a warning, and agents see that
-data marked `UNAVAILABLE`.
+`--max-sectors N` pursues only the N highest-confidence sectors the market scanner
+calls (downside sectors are skipped when your profile doesn't allow shorts);
+`--shortlist N` forwards at most N companies per sector. A run like this takes about
+15 minutes. Read the report and the agents' analyses closely.
 
-## 3. Pre-flight check
+## 3. Daily run (after the close)
 
-```sh
-trading-pipeline check                       # AAPL and Health Care by default
-trading-pipeline check --ticker NVDA --sector Technology
+```
+/run
 ```
 
-Calls every data source once (roughly 100 Equibles calls, no LLM: that is the whole
-daily allowance of the Free plan, so use Plus) and prints OK / WARN / FAIL per data type. It exits 1 on any FAIL, because a run would otherwise hand the agents
-missing data. WARN is expected for the quote on the Free plan (last close, not live).
+Run it after the US close (16:00 New York) so daily bars are final. The report is shown
+and saved to `workspace/runs/<run_id>/report.md`; each recommendation shows its
+`candidate_id`. One agent on its own: `/run-agent <agent> <subject>`, e.g.
+`/run-agent sector-deep-dive "Energy" upside` or `/run-agent technical-analysis NVDA`.
 
-For a first run, keep it small and read the output closely:
+## 4. Workflow: decide → trade → follow up → evaluate → improve
 
-```sh
-trading-pipeline run --max-sectors 1 --shortlist 3
 ```
-
-`--max-sectors N` pursues only the N highest-confidence sectors from Agent 0 (the others
-are listed as not pursued); `--shortlist N` forwards at most N companies per sector.
-
-## 4. Daily run (after the close)
-
-```sh
-trading-pipeline run                       # as of now; uses live quotes
-trading-pipeline run --as-of 2026-06-01    # that day's 16:00 New York close
-trading-pipeline run --backtest --as-of 2026-06-01T20:00:00+00:00
-trading-pipeline report                    # show the latest report again
-trading-pipeline report RUN_ID             # a specific run
-```
-
-Run it after the US close (16:00 New York) so daily bars are final. A date means that
-day's close. A past date always runs as a backtest (live quotes are not point-in-time),
-and `--backtest` forces that for today too. The report is saved; its header shows the
-run id, and each recommendation shows its `candidate_id`.
-
-## 5. Workflow: decide → follow-up → close → review → approve
-
-```sh
-trading-pipeline decide CANDIDATE_ID accept --note "half size"   # or: reject
-trading-pipeline positions            # open positions with entry/target/stop
-trading-pipeline follow-up            # one Agent 5 tick (usually from cron)
-trading-pipeline close POSITION_ID --price 123.45 [--date 2026-06-20]
-trading-pipeline review POSITION_ID   # outcome (facts) + process review (reasoning)
-trading-pipeline notes                # improvement notes waiting for approval
-trading-pipeline approve-note NOTE_ID
+/decide <candidate_id> accept "half size"     # or: reject
+/trade <position_id> entered 118.40           # when you have actually bought
+/follow-up                                    # one tick over open positions (schedule it)
+/trade <position_id> exited 131.10 2026-10-30 # when you have exited
+/evaluate                                     # grade runs at least a week old
+/feedback <agent>                             # propose lessons for one agent
+/approve <agent> <proposal_id>                # or: ... reject
 ```
 
 1. **Decide.** Only recommended candidates can be decided, once each. `accept` opens a
-   watched position from the technical plan (`--opened DATE` if you entered earlier);
-   you place the trade yourself. `reject` is recorded and nothing is watched.
-2. **Follow up.** Each tick checks every open position: price against stop and target
-   (per the profile's `level_trigger`) and material news. An alert triggers a full LLM
-   re-review (hold / adjust plan / exit); so does the 14-day review interval. Alerts
-   for one position are held for 12 hours after the previous one and delivered
-   together afterwards. When a stop or target is hit, or a re-review recommends exit,
-   the output says `ACTION NEEDED` with the `close` and `review` commands to run.
-3. **Close** when you have exited, with your actual exit price and date.
-4. **Review.** The outcomes agent computes return, drawdown and stop/target hits
-   without judgment; the process agent grades each stage's reasoning and may suggest
-   improvement notes. It never sees your accept/reject or notes. You can also review
-   an open position for an interim look.
-5. **Approve** only the notes you agree with. Only approved notes are added to future
-   prompts of the stage they target.
+   watched position from the technical plan (`position_id` = `candidate_id`); you place
+   the trade yourself. `reject` is recorded and nothing is watched.
+2. **Trade.** Record your actual entry and exit; only the prices and dates reach the
+   position file.
+3. **Follow up.** Each tick checks every open position: price against stop and target
+   (per the profile's `level_trigger`), a missed entry, and material news. A delivered
+   alert, or 14 days since the last one, triggers a full re-review (hold / adjust plan /
+   exit). Alerts for a position are held for 12 hours after the previous one and
+   delivered together afterwards. When a stop or target is hit, or a re-review says
+   exit, the output starts with **ACTION NEEDED**.
+4. **Evaluate.** Grades each agent's past calls against what happened since: outcome
+   facts, and separately the quality of its reasoning with an attribution (foreseeable
+   miss, data gap, black swan, normal variance). After the agents' results, you see a
+   short review of your own decisions against the outcomes, in chat only.
+5. **Improve.** `/feedback` proposes up to 3 lessons for one agent, each backed by a
+   pattern across evaluations. Approving one adds it to `prompts/<agent>/lessons.md` as
+   a git commit; every later analysis records the prompt commit it ran with.
+
+## 5. Backtests
+
+```
+/backtest --as-of 2026-06-01 --max-sectors 1 --shortlist 3
+/evaluate --run <run_id> --min-days 0
+```
+
+A date means that day's 16:00 New York close. For every stage agent, a gatekeeper agent
+builds a data pack of what was public then, an auditor checks it, and the stage agent
+(with no data tools) reads only the pack. The run is labelled `audited` or
+`leaks-found`. Limits: price levels are split-adjusted to today, macro values are
+latest-revised, and ETF holdings exist only for the latest report
+(`--allow-current-constituents` uses today's list and marks the run survivorship-biased).
+Only dates after the model's training cutoff are honest evidence. Backtests take
+longer than live runs (three agents per stage).
 
 ## 6. Scheduling (cron)
 
-Cron runs with a minimal environment, so each line sources the env file and uses absolute paths.
-Times below are in New York time via `CRON_TZ` (supported by cronie; with other crons,
-convert to the machine's zone).
+Cron runs with a minimal environment, so each line sources the env file. Times are New
+York time via `CRON_TZ` (cronie; with other crons, convert to the machine's zone).
 
 ```cron
 CRON_TZ=America/New_York
+RUN="cd $HOME/trading-platform && CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS=0 claude -p --mcp-config .mcp.json --permission-mode acceptEdits --model claude-sonnet-5 --effort low"
 
 # Daily run after the close, Monday to Friday.
-30 16 * * 1-5  . $HOME/.trading-platform/env && $HOME/trading-platform/.venv/bin/trading-pipeline run >> $HOME/.trading-platform/run.log 2>&1
+30 16 * * 1-5  . $HOME/.trading-platform/env && eval "$RUN '/run'" >> $HOME/.trading-platform/run.log 2>&1
 
-# Agent 5 every 2 hours during market hours (10:00, 12:00, 14:00), plus once after the close.
-0 10-14/2 * * 1-5  . $HOME/.trading-platform/env && $HOME/trading-platform/.venv/bin/trading-pipeline follow-up --quiet 2>&1 | mail -E -s "trading follow-up" you@example.com
-15 16 * * 1-5      . $HOME/.trading-platform/env && $HOME/trading-platform/.venv/bin/trading-pipeline follow-up --quiet 2>&1 | mail -E -s "trading follow-up" you@example.com
+# Follow-up at 10:00, 12:00, 14:00 and after the close.
+0 10-14/2 * * 1-5  . $HOME/.trading-platform/env && eval "$RUN '/follow-up'" >> $HOME/.trading-platform/follow-up.log 2>&1
+15 16 * * 1-5      . $HOME/.trading-platform/env && eval "$RUN '/follow-up'" >> $HOME/.trading-platform/follow-up.log 2>&1
+
+# Weekly evaluation, Saturday morning.
+0 9 * * 6  . $HOME/.trading-platform/env && eval "$RUN '/evaluate'" >> $HOME/.trading-platform/evaluate.log 2>&1
 ```
 
-`follow-up --quiet` prints nothing when all positions are quiet, so `mail -E` (skip empty
-mail) only sends alerts, re-reviews and needed actions. Market holidays are not skipped;
-a tick on a holiday just finds no new data.
+`CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS=0` keeps a headless run from killing an agent that
+was started in the background. Market holidays are not skipped; a tick on a holiday just
+finds no new data.
 
 ## 7. Where data is stored
 
-Everything lives in one SQLite file (`TRADING_DB`, default
-`~/.trading-platform/pipeline.sqlite3`):
+Everything is in `workspace/` at the repository root (git-ignored). Formats:
+[`prompts/formats.md`](../prompts/formats.md).
 
-- `docs` table: saved reports, stage records (every agent's structured reasoning), raw
-  data snapshots each stage saw, candidates, positions, tripwire checks, outcomes,
-  process reviews, improvement notes, conflicts.
-- `user_decisions` table: your accept/reject decisions and notes, kept apart and never
-  read by any agent.
+- `runs/<run_id>/`: the run manifest (`run.md`), the profile used, the report; for
+  backtests also the lessons as of the date and the audited data packs.
+- `agents/<agent>/analyses/<run_id>/<subject>/`: each agent's analysis (`output.md`) and
+  every Equibles response it received (`raw/`).
+- `agents/<agent>/evaluations/` and `agents/<agent>/feedback/`: grades and proposed lessons.
+- `positions/<position_id>/`: watched positions and their alert log.
+- `decisions/`: your decisions, notes, trade log and decision reviews. Only the
+  middleware agent reads this folder.
 
-Back it up by copying the file while no command is running. Deleting it resets the
-system, including approved improvement notes.
+Back it up by copying the folder while nothing is running. Approved lessons live in
+`prompts/` (git), not in `workspace/`.

@@ -1,28 +1,5 @@
-[project]
-name = "trading-pipeline"
-version = "0.1.0"
-description = "Multi-agent trading research pipeline (decision support only; never places orders)"
-requires-python = ">=3.11"
-dependencies = [
-    "anthropic>=1.8",
-    "pydantic>=2.6",
-]
-
-[project.scripts]
-trading-pipeline = "trading_pipeline.cli:main"
-
-[project.optional-dependencies]
-equibles = ["mcp>=2.2"]
-equibles-postgres = ["psycopg[binary]>=3.1"]
-dev = ["pytest>=8", "pytest-asyncio>=0.23", "psycopg[binary]>=3.1", "mcp>=2.2"]
-
-[build-system]
-requires = ["setuptools>=68"]
-build-backend = "setuptools.build_meta"
-
-[tool.setuptools.packages.find]
-where = ["src"]
+# The pipeline itself is prompts (prompts/) and Claude Code configuration (.claude/).
+# Python is only used for the harness hooks in .claude/hooks/ and their tests.
 
 [tool.pytest.ini_options]
-asyncio_mode = "auto"
 testpaths = ["tests"]

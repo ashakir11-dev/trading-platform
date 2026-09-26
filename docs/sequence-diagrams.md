@@ -1,127 +1,118 @@
 # Sequence diagrams
 
-How data moves between agents at runtime. Agents never call each other: the
-**Middleware** fetches data, builds each prompt from the upstream report plus the
-relevant raw data, validates the structured reply, logs it, and hands it on. See
-[ARCHITECTURE.md](ARCHITECTURE.md) for the principles behind each step.
+How a run moves between agents. The **middleware agent** (the slash commands) launches
+each subagent with a brief, never fetches data itself, and moves results along through
+the analysis folders in `workspace/`. Each subagent fetches its own data from
+Equibles; a hook saves every response to the agent's `raw/` folder. See
+[ARCHITECTURE.md](ARCHITECTURE.md) for the principles and
+[prompt-subagents-design.md](prompt-subagents-design.md) for the mechanics.
 
-Notes marked **Rule** are deterministic checks in code (no LLM).
-
-## 1. Pipeline run (one `as_of` date)
-
-Rendered: [diagrams/sequence-pipeline-run.png](diagrams/sequence-pipeline-run.png)
+## 1. Pipeline run (`/run`)
 
 ```mermaid
 sequenceDiagram
     autonumber
     actor User
-    participant MW as Middleware
-    participant Data as Data providers
-    participant Store as Store (SQLite)
-    participant A0 as Agent 0<br/>Market Scanner
-    participant A1 as Agent 1<br/>Sector Deep Dive
-    participant A2 as Company Deep Dive
-    participant A3 as Technical Analysis
+    participant MW as Middleware agent
+    participant A0 as market-scanner
+    participant A1 as sector-deep-dive (×N)
+    participant A2 as company-deep-dive (×M)
+    participant A3 as technical-analysis (×M)
+    participant EQ as Equibles MCP
+    participant WS as workspace/
 
-    User->>MW: run(as_of)
-    MW->>Store: load approved improvement notes (lessons per stage)
-
-    MW->>Data: market_overview(as_of), macro(as_of)
-    Data-->>MW: sector ETF performance + macro snapshots (market-level, reach every stage)
-    Note over MW: Rule: reject any snapshot dated after as_of (look-ahead guard)
-    MW->>Store: save snapshots
-    MW->>A0: raw market data
-    A0-->>MW: MarketScanOutput (sector calls + structured reasoning)
-    MW->>Store: log one StageRecord per sector call
-
-    par one independent pass per sector
-        MW->>Data: sector_screen, sector_breadth, sector news (as_of)
-        Data-->>MW: bulk screen (one row per company) + sector data
-        MW->>Store: save snapshots
-        MW->>A1: Agent 0's sector call (confidence hidden) + market + sector raw data
-        A1-->>MW: SectorDeepDiveOutput (every company: score, pass/fail, catalysts, reasoning)
+    User->>MW: /run [--max-sectors N] [--shortlist N]
+    MW->>WS: run.md, profile.json (copy)
+    MW->>A0: brief (run_id, as_of, analysis folder)
+    A0->>WS: claim.md
+    A0->>EQ: ETF prices, macro, VIX, calendar (one batch)
+    EQ-->>A0: responses (prices as statistics)
+    Note over WS: hook saves every response to raw/
+    A0->>WS: output.md (sector calls)
+    A0-->>MW: done <path>
+    Note over MW: drop downside calls if no shorts;<br/>keep the N most confident
+    par one per pursued sector
+        MW->>A1: brief (sector, direction, upstream = scanner folder)
+        A1->>WS: read scanner output + raw/
+        A1->>EQ: holdings, screen, prices, filings, events
+        A1->>WS: companies/*.md, output.md (ranked shortlist)
     end
-    Note over MW: Rule: forward passing companies, ranked by score, capped per sector
-    Note over MW: Rule: same ticker from several sectors is always recorded as a Conflict,<br/>shorts rejected if the investor profile is long-only
-    MW->>Store: log forwarded, not-forwarded and rule-rejected entries, save Conflicts, create Candidates
-
-    par one independent pass per company
-        Note over MW: Rule: filter raw data to market + sector + this company only
-        MW->>Data: fundamentals, recent_filings, 8-K events (ticker, as_of)
-        Data-->>MW: point-in-time financials, filings, events (or explicit data-gap snapshots)
-        MW->>A2: Agent 0 + Agent 1 reports (confidence hidden) + filtered raw data
-        A2-->>MW: CompanyDeepDiveOutput (verdict, catalyst checks, reasoning)
+    Note over MW: passed, best score first, cap per sector;<br/>record duplicates and conflicts
+    par one per candidate
+        MW->>A2: brief (ticker, direction, upstream = scanner + sector)
+        A2->>EQ: fundamentals, filings, guidance, estimates, insiders...
+        A2->>WS: output.md (verdict, catalyst checks)
     end
-    Note over MW: Rule: advance only on verdict "pass", record confidence for attribution
-    MW->>Store: log verdicts, rejected candidates stop here
-
-    par one independent pass per surviving company (no cross-comparison)
-        MW->>Data: ohlcv, indicators, pivots for each timeframe the profile's horizons need (as_of)
-        MW->>Data: upcoming_earnings(ticker, as_of)
-        Data-->>MW: price data per timeframe, earnings calendar
-        MW->>A3: company deep dive report + investor profile + company raw data + charts + earnings
-        A3-->>MW: TechnicalOutput (verdict, setup, trade plan with horizon and chart timeframe, reasoning)
+    par one per candidate that passed
+        MW->>A3: brief (ticker, upstream = company, profile)
+        A3->>EQ: prices (statistics + levels), quote, earnings
+        A3->>WS: output.md (plan + rule results)
     end
-    Note over MW: Rule: "pass" without a plan is treated as reject
-    alt live run
-        MW->>Data: quote(ticker)
-        Data-->>MW: live price
-    else backtest
-        MW->>Data: bars(ticker, as_of) for the last close
-    end
-    Note over MW: Rules: price order, profile horizon/short/max loss/reward:risk,<br/>stale entry (reject), upcoming earnings (flag)
-    MW->>Store: log verdicts with rule results, save Candidates
-    MW-->>User: PipelineReport (recommendations with flags, rejections, conflicts, confidence trajectories)
+    Note over MW: recompute price order, max loss,<br/>reward:risk; a mismatch blocks it
+    MW->>WS: report.md
+    MW-->>User: report
+    User->>MW: /decide <candidate_id> accept|reject
+    MW->>WS: decisions/<id>.md (middleware only);<br/>positions/<id>/position.md on accept
 ```
 
-## 2. User decision, follow-up loop, and review
-
-Rendered: [diagrams/sequence-followup-review.png](diagrams/sequence-followup-review.png)
+## 2. Follow-up, evaluation and feedback
 
 ```mermaid
 sequenceDiagram
     autonumber
     actor User
-    participant Sched as Scheduler (cron)
-    participant MW as Middleware
-    participant Data as Data providers
-    participant Store as Store (SQLite)
-    participant A5 as Agent 5<br/>Follow-Up
-    participant OUT as Outcomes<br/>(deterministic)
-    participant PROC as Process Review
+    participant MW as Middleware agent
+    participant A5 as follow-up (×positions)
+    participant EV as stage-evaluator
+    participant FB as stage-feedback
+    participant WS as workspace/
 
-    User->>MW: record_decision(candidate, accept/reject)
-    MW->>Store: save UserDecision (separate table, never shown to agents)
-    alt accepted
-        MW->>Store: create Position from the technical plan
+    User->>MW: /follow-up (or cron)
+    par one per open position
+        MW->>A5: brief (position, last check, cooldown state)
+        A5->>WS: read position, plan, earlier analyses
+        Note over A5: tripwires: stop/target, missed entry,<br/>material news; 12h cooldown;<br/>full re-review on alert or every 14 days
+        A5->>WS: output.md
     end
-    Note over User,MW: The user trades manually, the system never places orders
-
-    loop every scheduled tick, for each open position
-        Sched->>A5: tick(now)
-        A5->>Data: price bars since open, news since last check
-        Data-->>A5: bars, events
-        Note over A5: Rule (tripwire): close beyond stop or target, or MATERIAL news<br/>(noise such as price chatter and reiterations is filtered out)
-        Note over A5: Rule (cooldown): no second alert within 12h of the last one,<br/>held reasons are delivered with the next alert
-        A5->>Store: save TripwireResult (tripped, alerted)
-        alt alert raised OR full-review interval elapsed
-            A5->>Store: load original reasoning trail
-            A5->>Data: fresh charts for the plan's horizon, macro, fundamentals, filings, earnings
-            A5->>A5: LLM full re-review with investor profile (hold / adjust plan / exit)
-            A5->>Store: log StageRecord, update last_full_review_at
-            A5-->>User: flag (advice only), plus "action needed" if the stop/target was hit or exit advised
-        end
+    MW->>WS: position state, alerts.md
+    MW-->>User: alerts, ACTION NEEDED when a level is hit or exit advised
+    User->>MW: /trade <id> exited <price>
+    User->>MW: /evaluate
+    par one per (run, agent)
+        MW->>EV: brief (agent, run, eval date)
+        EV->>WS: evaluations/<run>--<date>/output.md
     end
+    MW->>WS: decisions/reviews/ (your decision vs outcome)
+    MW-->>User: agent grades; your decision review in chat only
+    User->>MW: /feedback <agent>
+    MW->>FB: brief (agent, evaluations)
+    FB->>WS: feedback/<proposal>.md (pending)
+    User->>MW: /approve <agent> <proposal>
+    MW->>MW: append to prompts/<agent>/lessons.md, git commit
+```
 
-    User->>MW: close_position(exit price, date)
-    User->>MW: review_position(position)
-    MW->>Data: price bars over the holding period
-    MW->>OUT: position + bars
-    OUT-->>MW: OutcomeReport (return, drawdown, hit stop/target), no judgment
-    MW->>Store: review_trail(position) (stage records + snapshots, NO user decisions)
-    MW->>PROC: reasoning trail + raw data each stage had + outcome
-    PROC-->>MW: per-stage grades, foreseeable vs black-swan attribution, improvements
-    MW->>Store: save review and ImprovementNotes (unapproved)
-    User->>Store: approve_improvement(note)
-    Note over Store: Rule: only approved notes are injected into future stage prompts
+## 3. Backtest stage (`/backtest`)
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant MW as Middleware agent
+    participant GK as gatekeeper
+    participant AU as pit-auditor
+    participant ST as <agent>-backtest
+    participant WS as workspace/runs/<run>/
+
+    MW->>WS: lessons/<agent>.md (as committed before as_of)
+    MW->>GK: stage, subject, as_of, pack folder
+    GK->>WS: packs/.../data/ (filtered to as_of), gaps, manifest
+    Note over WS: raw responses go to .gatekeeper/ (hidden from the others);<br/>prices copied with later bars removed
+    MW->>AU: pack, as_of
+    AU->>WS: audit.md (clean | leaks)
+    MW->>ST: brief + pack + lessons (no data tools)
+    ST->>WS: output.md (+ requests.md if it needs more)
+    opt requests (at most 2 rounds)
+        MW->>GK: extend the pack
+        MW->>AU: re-audit
+        MW->>ST: rerun with the draft
+    end
 ```
