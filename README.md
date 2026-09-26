@@ -92,15 +92,37 @@ it; without one, the example is used.
 }
 ```
 
-## Getting started
+## Run it now
 
-Requires the [Claude Code](https://code.claude.com) CLI, an Anthropic API key and an
-Equibles API key (Plus plan or better: a full run makes a few hundred data calls).
+**In Claude Code on the web** (nothing to install):
+
+1. Open [claude.ai/code](https://claude.ai/code) and start a new session on this
+   repository, in a cloud environment that has `EQUIBLES_API_KEY` set as an environment
+   variable (and network access to `mcp.equibles.com`). No Anthropic key is needed: the
+   agents run on the session's own model access.
+2. Type `/run --max-sectors 1 --shortlist 3` (a small run, about 15 minutes), or `/run`
+   for every sector the scanner calls.
+3. The report appears in the chat and in `workspace/runs/<run_id>/report.md`.
+4. Record a decision with `/decide <candidate_id> accept "note"` (or `reject`).
+
+To use your own profile, ask the session to write it to `workspace/profile.json`
+before `/run`; otherwise `profile.example.json` is used.
+
+> Each cloud session starts with an empty `workspace/`, so runs, positions and
+> decisions from one session are not there in the next. Fine for trying it; for
+> follow-up and evaluation over days, run it on your own machine (below) until the
+> workspace is persisted.
+
+## Getting started (your own machine)
+
+Requires the [Claude Code](https://code.claude.com) CLI (terminal or desktop app), an
+Anthropic API key or a Claude Code login, and an Equibles API key (Plus plan or better:
+a full run makes a few hundred data calls).
 
 ```bash
 git clone https://github.com/ashakir11-dev/trading-platform.git
 cd trading-platform
-export ANTHROPIC_API_KEY=...
+export ANTHROPIC_API_KEY=...   # or be logged in to Claude Code
 export EQUIBLES_API_KEY=...
 claude          # once: accept the trust dialog and the "equibles" MCP server
 ```
