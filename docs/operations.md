@@ -55,7 +55,11 @@ calls (downside sectors are skipped when your profile doesn't allow shorts);
 
 Run it after the US close (16:00 New York) so daily bars are final. The report is shown
 and saved to `workspace/runs/<run_id>/report.md`; each recommendation shows its
-`candidate_id`. One agent on its own: `/run-agent <agent> <subject>`, e.g.
+`candidate_id`. The same run is also rendered as a page to open in a browser,
+`workspace/runs/<run_id>/report.html`: one card per recommendation with its price
+ladder (stop / entry / target / price now), max loss, potential gain, reward:risk,
+catalysts, flags and the agents' confidence. It is self-contained (no network), so it
+can be opened offline or shared as a file. One agent on its own: `/run-agent <agent> <subject>`, e.g.
 `/run-agent sector-deep-dive "Energy" upside` or `/run-agent technical-analysis NVDA`.
 
 ## 4. Workflow: decide → trade → follow up → evaluate → improve

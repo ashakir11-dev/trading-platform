@@ -22,5 +22,7 @@ Subagent pipeline: prompts in `prompts/`, subagents and commands in `.claude/`, 
 `workspace/`. `.claude/hooks/workspace_guard.py` enforces the decisions firewall, the read-only tool rule and
 raw-data capture, and turns price responses into statistics (`price_stats.py`, arithmetic only); keep
 `tests/test_workspace_guard.py` and `tests/test_price_stats.py` passing when changing them.
+`scripts/render_report.py` lays out the middleware's `report.json` as `report.html` (layout and plan distances
+only, no network); keep `tests/test_render_report.py` passing.
 
 Dev: `pip install pytest && pytest` (tests cover the hooks). Running the pipeline: `docs/operations.md`.

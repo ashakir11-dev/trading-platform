@@ -1,5 +1,6 @@
 # The pipeline itself is prompts (prompts/) and Claude Code configuration (.claude/).
-# Python is only used for the harness hooks in .claude/hooks/ and their tests.
+# Python is only used for the harness hooks in .claude/hooks/, the report renderer in
+# scripts/ and their tests.
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

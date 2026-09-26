@@ -14,6 +14,7 @@
       "Bash(mv workspace/agents/:*)",
       "Bash(git rev-parse:*)",
       "Bash(git status:*)",
+      "Bash(python3 scripts/render_report.py:*)",
       "mcp__equibles__GetStockPrices",
       "mcp__equibles__GetLatestClosingPrices",
       "mcp__equibles__GetLiveQuote",
