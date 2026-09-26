@@ -25,7 +25,8 @@ As of <as_of> · prompt <prompt_commit> · profile <name> · options <...>
 |---|---|---|---|---|
 
 ## Recommendations
-<candidate_id, ticker, direction, trade type and setup, entry (tranches) / stop /
+<highest planned R first: candidate_id, ticker, direction, reward (t1 / planned /
+potential in R and %, the potential's basis), trade type and setup, entry (tranches) / stop /
 targets with exit fractions, trailing stop, entry valid until, checkpoints, max hold
 until, event plan, rule flags>
 <"None: ..." with the reason when empty>

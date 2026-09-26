@@ -91,7 +91,7 @@ Step-by-step runtime flow (sequence diagrams): [`sequence-diagrams.md`](sequence
 
 **Investor profile** (`workspace/profile.json`, example in `profile.example.json`): who the pipeline works for, including risk tolerance, allowed
 holding horizons, whether shorts are allowed, maximum loss per trade, minimum
-reward:risk, target return, how stop/target hits are detected (`level_trigger`), and
+reward:risk, how stop/target hits are detected (`level_trigger`), and
 free-text notes. It is the user's *preferences*, set up
 front, not a decision, so showing it to agents does not break the one-way middleware
 principle. The technical agent and Agent 5's full review read it, and the rules
@@ -204,6 +204,7 @@ is a new plan, checked against every rule from the current price.
 | Plan format | Trade type, setup label, optional entry tranches, **one to three targets with exit fractions** and a trailing stop for the rest, entry expiry, checkpoints, max hold and an event plan. `reward_to_risk` is checked on T1. |
 | Rules | `stale_entry` uses the plan's stale cap and an ATR distance instead of a fixed 3%; `upcoming_earnings` scans to the max hold; new `scale_out`, `time_limits`, `reachability` and `liquidity` rules. The middleware recomputes all the arithmetic ones. |
 | Follow-up | Price and clock alerts bypass the 12h cooldown (news only); re-review cadence by trade type; positions record partial fills and exits (`/trade ... [fraction]`). |
+| Reward | **No fixed target return.** Reward:risk to T1 is the gate; each plan also reports its planned and potential reward (R and %), recommendations are ranked by planned then potential R, and each trade type has a reference T1 distance in ATR (never a gate). The evaluator records capture of the potential. |
 | Evaluation | Plans are walked forward as written: entries expire, targets and trailing stops exit their fractions, checkpoints act, and whatever is left closes at the max hold as a time exit with realised R; graded by setup and trade type. |
 
 **Open:**

@@ -112,11 +112,13 @@ m = `min_reward_to_risk`; with `entry_tranches`, every fill state):
   `expected_sessions_to_t1` ≤ ⅔ × `max_hold_sessions`; checkpoint prices (e + 0.5R,
   e + 1R, …) computed right and between e and T1;
 - reachability: |T1 − e| / (0.63 × ATR × √N) ≤ 1.5, with the plan's `atr`;
-- liquidity (`short_swing`, `swing`): `dollar_volume_20d` ≥ $5M.
+- liquidity (`short_swing`, `swing`): `dollar_volume_20d` ≥ $5M;
+- reward: `t1` and `planned` R (not a rule, but a mismatch is recorded the same way).
 
 If your numbers disagree with the agent's rule results, do not recommend: record the
 candidate under "Not pursued" as `rule check mismatch: <rule>, agent <x>, recomputed <y>`.
-Otherwise list it under "Recommendations" with trade type, setup, entry (and tranches),
+Otherwise list it under "Recommendations", **ordered by `planned` R, then `potential`
+R, highest first**, with the reward (t1, planned and potential, R and %), trade type, setup, entry (and tranches),
 stop, targets with exit fractions, trailing stop, entry valid until, checkpoints, max
 hold until, the event plan and every `flag`. Rejected candidates go under "Not pursued"
 with the failing rule or the agent's reason.

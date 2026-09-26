@@ -35,8 +35,11 @@ Your method for reading the chart and building the plan is in
 
 Read the profile file named in your brief. It sets: `horizons` (allowed), optionally `trade_types`
 (allowed; absent = every trade type within the horizons), `allow_short`,
-`max_loss_per_trade_pct` (L), `min_reward_to_risk` (m), `target_return_pct`,
-`level_trigger`, `risk_tolerance` and free-text `notes`. Respect all of them.
+`max_loss_per_trade_pct` (L), `min_reward_to_risk` (m), `level_trigger`,
+`risk_tolerance` and free-text `notes`. Respect all of them. There is **no fixed target
+return**: a plan is judged by its reward:risk (the gate) and by the **potential reward**
+the chart offers (below), never by a return figure set in advance. Ignore a
+`target_return_pct` if an old profile still has one.
 
 ## Trade types and charts
 
@@ -51,6 +54,10 @@ allowed trade type fits the chart, reject. **Sessions** are NYSE trading days; w
 | `swing` | 2-8 weeks | `swing` | `1d` | daily, 1 year | weekly, 2 years | 10 sessions | 40 sessions | 1.0 daily ATR |
 | `long_swing` | 2-6 months | `swing` if max hold ≤ 65 sessions, else `long_term` | `1w` | weekly, 2 years (daily for structure) | weekly, 5 years | 20 sessions | 130 sessions | 0.5 weekly ATR |
 | `investment` | 6 months and more | `long_term` | `1w` | weekly, 5 years | monthly, 10 years (built from weekly) | 40 sessions | 260 sessions | 0.5 weekly ATR |
+
+**Reasonable T1 distance** (reference only, never a gate; the chart decides):
+`short_swing` 3-3.7 daily ATR, `swing` 4-6 daily ATR, `long_swing` 2-4.8 weekly ATR,
+`investment` 3-6.8 weekly ATR. A T1 well outside its range needs a reason in `## Plan`.
 
 "Entry valid" and "Max hold" are ceilings; a plan may use less. Read entry, stop and
 targets from the **primary** chart; use the context chart for the trend.
@@ -113,7 +120,17 @@ Send steps 1-4 together in one message.
   `exit_fraction` of the position to sell there. T1 is the first; `reward_to_risk` is
   checked on T1 alone. If the fractions add up to less than 1, `trailing_stop` says how
   the rest is managed (e.g. "after T1: stop to entry; then daily close below EMA21");
-  otherwise it is `null`.
+  otherwise it is `null`. Don't cap targets at a return figure: place each where the
+  chart puts it.
+- **Reward:** `reward` reports what the plan can earn, in R (multiples of the risk
+  |e − s|) and in %:
+  - `t1`: T1 alone (what `reward_to_risk` checks);
+  - `planned`: the plan followed as written, each fraction exiting at its target and any
+    remainder valued at the last target (Σ fraction × (target − e) / R);
+  - `potential`: the furthest level the chart supports within the max hold (the next
+    major resistance, a measured move, a prior high), with its `basis`. It may lie
+    beyond the last target (what the trailing stop can catch). Mark it `stretch: true`
+    if its reachability k (as in the rule) is above 1.5.
 - **Timeline:** no trade is open-ended. `checkpoints` (at least one; the defaults above,
   or earlier) are progress tests counted in sessions after the fill, each with the
   action if it fails. `max_hold_sessions` ends the trade: exit at that close whatever
@@ -185,6 +202,10 @@ plan:                            # null when there is no chart setup at all
   event_plan:
     - {date: 2026-10-30, event: "Q3 earnings (confirmed, before the open)", action: "at the 10-29 close: hold with the stop at entry if open profit >= 1R, sell half if >= 0.5R, else exit"}
   invalidation: "daily close back below 113.50"
+reward:                          # R = multiples of |e - s| = 7.40
+  t1: {r: 2.11, pct: 13.18}
+  planned: {r: 2.65, pct: 16.55}  # 0.5 x 2.11 + 0.5 x 3.19 (T2 and the remainder)
+  potential: {price: 150.00, r: 4.27, pct: 26.69, basis: "2025 closing high; runner on the trailing stop", stretch: true}
 atr: {value: 2.80, timeframe: 1d}            # the ATR the rules use
 dollar_volume_20d: 412000000
 current_price: {price: 117.10, source: live_quote, at: 2026-09-25T19:45:00Z}

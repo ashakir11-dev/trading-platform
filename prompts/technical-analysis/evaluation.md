@@ -24,7 +24,9 @@ forward session by session, exactly as written:
   of the filled tranches, s = the initial stop; how it ended (`stop`, `targets`,
   `trail`, `checkpoint`, `time_exit`, `event`); sessions from the fill to T1 against
   `expected_sessions_to_t1`; MFE and MAE (best and worst move from E, in % and in R);
-  give-back (peak open R minus realised R).
+  give-back (peak open R minus realised R); capture = realised R / the plan's
+  `reward.potential` R, and whether the price reached the potential level at all
+  within the max hold.
 - **Still open** at `eval_as_of` (neither ended nor past `max_hold_sessions`): the
   mark-to-market R, MFE and MAE, and which clock comes next.
 - `worked`: realised R > 0 → true; ≤ 0 → false; not filled or still open → null.
@@ -36,7 +38,7 @@ forward session by session, exactly as written:
 
 **Summary metrics:** `plans`, `filled`, `expired_unfilled`, `open`, and among closed
 plans: `ended_by` counts (stop, targets, trail, checkpoint, time_exit, event),
-`avg_realised_r`, `avg_mfe_r`, `avg_mae_r`, `avg_give_back_r`, `t1_on_time` (T1
+`avg_realised_r`, `avg_mfe_r`, `avg_mae_r`, `avg_give_back_r`, `avg_capture`, `potential_reached`, `t1_on_time` (T1
 reached within `expected_sessions_to_t1`), and `by_setup` and `by_trade_type` (plans,
 closed, avg_realised_r each). Also `rejected_that_ran` (rejected setups that rose more
 than the plan's would-be T1 distance, if a plan was sketched).
@@ -45,7 +47,9 @@ than the plan's would-be T1 distance, if a plan was sketched).
 did it follow it (procedure, setup criteria, entry and exit rules), and where it
 deviated, was that justified? Were the stop and targets at levels the chart justified (swing points,
 ATR) or placed to fit the rules? Was the trade type right for the chart, and was the
-timeline (entry validity, checkpoints, max hold, expected time to T1) realistic? Was
+timeline (entry validity, checkpoints, max hold, expected time to T1) realistic? Was the
+potential reward realistic (reached about as often as its `stretch` marks imply), and
+were targets placed where the chart put them rather than cut short? Was
 event risk weighed and planned for? Was a plan sitting right at a rule limit
 (reward:risk within 0.1 of the minimum, max loss within 0.5 points, reachability k
 within 0.1 of 1.5)? That is a warning sign worth recording.

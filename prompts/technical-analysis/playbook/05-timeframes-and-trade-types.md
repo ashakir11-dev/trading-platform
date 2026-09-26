@@ -247,7 +247,7 @@ Run in order; stop at the first rejection that applies to every remaining type.
 5. **Room.** T1 >= `min_reward_to_risk` x risk AND k <= 1.5 over the max hold (5.3). If k > 1.5, try a LONGER type whose structure supports the same invalidation (re-apply its buffer, re-check `max_loss`, R:R); else reject.
 6. **Events** (8): a report inside 15 sessions removes short_swing; a report 2-3 weeks out usually means wait and re-run after it.
 7. **Volatility, gaps, liquidity.** Daily ATR% > ~4%: usually only short_swing (or swing with a ~2-ATR stop) fits the cap; > ~5.3% even short_swing needs < 1.5 ATR, near the noise floor: usually reject. Dollar volume < $5M rejects short_swing/swing; gap count >= 3 (7.5) argues against short_swing.
-8. **Tie-break** [C]: the cleaner structure on its primary chart; if equal, the longer type (better signal-to-noise, momentum zone, fewer decisions), within `target_return_pct` and `horizons`.
+8. **Tie-break** [C]: the cleaner structure on its primary chart; if equal, the longer type (better signal-to-noise, momentum zone, fewer decisions), within the profile's `horizons` and `trade_types`.
 
 One sentence in `## Setup`: "trade_type swing: 6-week daily flat base in a weekly stage 2; stop 3.1 ATR (7.4%) fits; T1 k = 1.1 over 40 sessions; next report after max hold."
 
