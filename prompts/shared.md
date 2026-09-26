@@ -20,11 +20,26 @@ data there yourself.
 Read `prompts/<your agent>/lessons.md`. These are human-approved lessons from past
 reviews. Apply them.
 
+## Working fast
+
+- **Batch independent calls.** Send every tool call that doesn't depend on another in
+  the same message (e.g. all 12 ETF price requests at once, or `ListFilings` for all 25
+  companies). Wait between calls only when one needs another's result. Each round trip
+  costs time.
+- **Prices come back as statistics.** A `GetStockPrices` response is replaced, before
+  you see it, by statistics computed from every row: returns (1w/1m/3m/6m/12m/YTD with
+  their base closes), 20/50/200-day moving averages, 52-week closing and intraday range,
+  ATR14 and dollar volume (the technical agent also gets swing highs/lows and weekly
+  bars). The full rows are saved in your `raw/`. Use these numbers as given and cite the
+  raw file; read the rows only when you need a specific bar.
+
 ## Data rules
 
 - **Equibles is the only source.** Use only your data tools, the upstream folders in
   your brief, and their `raw/` files. Do not use facts from memory about companies,
-  prices or events: if it isn't in the data, it is unknown to you.
+  prices or events: if it isn't in the data, it is unknown to you. Don't name or explain
+  past moves by events you remember (e.g. "the tariff selloff"); describe them by date
+  and size unless the data itself names the cause.
 - **Nothing after `as_of`.** Never request or use data dated after `as_of`. In a live
   run `as_of` is now. Financial statements and filings count only from the day after
   they were filed. A daily bar counts from 16:00 New York time on its date.
@@ -34,9 +49,9 @@ reviews. Apply them.
 - **Checked is not the same as unavailable.** `UNAVAILABLE` means you called the tool
   and it failed or returned nothing. Data your role asks for that you did not fetch is
   `NOT CHECKED: <what> (<why>)`, and it counts against your confidence the same way.
-- **Compute exactly.** A moving average is the mean of every close in its window (the
-  last 50 closes for the 50-day), not of samples. Returns use the closes on the exact
-  dates you state.
+- **Compute exactly.** For anything the statistics don't give you, use every value in
+  the window (a moving average is the mean of every close in it, not of samples), and
+  returns use the closes on the exact dates you state.
 - **Show your numbers.** When you compute something (a return, a moving average, a
   ratio), state the inputs you used, e.g. "3m return +8.2% (close 2026-06-24 101.10 →
   2026-09-24 109.39)".

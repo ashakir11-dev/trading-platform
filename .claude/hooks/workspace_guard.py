@@ -15,7 +15,9 @@ even when a prompt is ignored. They contain no pipeline logic.
   * a subagent's first write inside ``workspace/agents/<agent>/analyses/<run>/<subject>/``
     claims that folder for the subagent;
   * every Equibles response a subagent receives is saved verbatim to its claimed
-    folder's ``raw/``, so raw data travels with the analysis without the agent copying it.
+    folder's ``raw/``, so raw data travels with the analysis without the agent copying it;
+  * a ``GetStockPrices`` response is replaced, for the agent, by statistics computed from
+    it (``price_stats.py``); the full rows stay in ``raw/``.
 
 Hook input (JSON on stdin) carries ``agent_id``/``agent_type`` only inside a subagent.
 """
@@ -29,6 +31,9 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import price_stats  # noqa: E402
 
 EQUIBLES_PREFIX = "mcp__equibles__"
 WRITE_TOOLS = frozenset({
@@ -142,10 +147,11 @@ def pre(event: dict[str, Any]) -> str | None:
 # --------------------------------------------------------------------------------------
 
 
-def post(event: dict[str, Any]) -> None:
+def post(event: dict[str, Any]) -> dict[str, Any] | None:
+    """Hook-specific output to return (a replaced tool output), or None."""
     tool, agent_id = event.get("tool_name", ""), event.get("agent_id")
     if not agent_id:
-        return
+        return None
     args = event.get("tool_input") or {}
 
     if tool in {"Write", "Edit", "MultiEdit"} and args.get("file_path"):
@@ -155,7 +161,7 @@ def post(event: dict[str, Any]) -> None:
             claim.parent.mkdir(parents=True, exist_ok=True)
             claim.write_text(json.dumps({"folder": str(folder), "agent_type": event.get("agent_type"),
                                          "claimed_at": _now()}))
-        return
+        return None
 
     if tool.startswith(EQUIBLES_PREFIX):
         folder = claimed_folder(event, agent_id)
@@ -169,11 +175,42 @@ def post(event: dict[str, Any]) -> None:
         seq = len(list(raw.glob("*.json"))) + 1
         while True:  # parallel tool calls: exclusive create, take the next free number
             try:
-                with open(raw / f"{seq:03d}-{name}.json", "x") as f:
+                path = raw / f"{seq:03d}-{name}.json"
+                with open(path, "x") as f:
                     f.write(body)
-                return
+                break
             except FileExistsError:
                 seq += 1
+        if name == "GetStockPrices":
+            return _price_stats_output(event, path)
+    return None
+
+
+def _response_text(response: Any) -> str:
+    if isinstance(response, str):
+        return response
+    if isinstance(response, dict):
+        response = response.get("content", [])
+    if isinstance(response, list):
+        return "\n".join(b.get("text", "") for b in response if isinstance(b, dict))
+    return ""
+
+
+def _price_stats_output(event: dict[str, Any], path: Path) -> dict[str, Any] | None:
+    """Replace hundreds of daily rows with computed statistics (the rows stay in raw/).
+
+    The technical-analysis agent also gets swing highs/lows and weekly bars, since it
+    reads levels. If the response can't be parsed, the agent sees it unchanged."""
+    try:
+        rel = path.relative_to(project_dir(event))
+    except ValueError:
+        rel = path
+    try:
+        text = price_stats.summary(_response_text(event.get("tool_response")), raw_file=str(rel),
+                                   with_levels=(event.get("agent_type") or "").startswith("technical-analysis"))
+    except (ValueError, KeyError):
+        return None
+    return {"hookEventName": "PostToolUse", "updatedMCPToolOutput": [{"type": "text", "text": text}]}
 
 
 def _now() -> str:
@@ -191,7 +228,9 @@ def main(argv: list[str]) -> int:
                                               "permissionDecisionReason": reason}}, sys.stdout)
         return 0
     if mode == "post":
-        post(event)
+        out = post(event)
+        if out:
+            json.dump({"hookSpecificOutput": out}, sys.stdout)
         return 0
     print(f"usage: {argv[0]} pre|post", file=sys.stderr)
     return 1

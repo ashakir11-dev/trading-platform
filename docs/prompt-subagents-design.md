@@ -274,6 +274,7 @@ per-agent rules possible. They hold no pipeline logic.
 | PreToolUse | A subagent's data calls are blocked until it has written `claim.md` in its analysis folder. |
 | PostToolUse | The first write inside `workspace/agents/<agent>/analyses/<run>/<subject>/` claims that folder for the subagent. |
 | PostToolUse | Every Equibles response a subagent receives is saved verbatim to `<folder>/raw/NNN-<Tool>.json`. Raw data travels with the analysis without the agent re-typing it, and evaluation sees exactly what the agent saw. |
+| PostToolUse | A `GetStockPrices` response (up to 500 daily rows) is replaced, for the agent, by statistics computed from it (`.claude/hooks/price_stats.py`): returns with their base closes, 20/50/200-day averages, 52-week range, ATR14, dollar volume; for the technical agent also swing highs/lows and weekly bars. The full rows stay in `raw/`. This is arithmetic only: it keeps the agents' context small (a 500-row response becomes ~1K characters), makes the numbers exact, and removes the slowest part of a run. |
 
 | Rule / principle | Today (code) | This design | Gap |
 |---|---|---|---|

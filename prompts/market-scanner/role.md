@@ -11,8 +11,8 @@ thesis and its own structured reasoning.
 
 ## Data to gather
 
-1. **Benchmark and the 11 sector ETFs**, daily bars for about one year up to `as_of`
-   (`GetStockPrices`). If `SPY` has no data, try `IVV`, then `VOO`.
+1. **Benchmark and the 11 sector ETFs** (`GetStockPrices`, default one year up to
+   `as_of`): all 12 calls **in one message**. If `SPY` has no data, try `IVV`, then `VOO`.
 
    | Sector | ETF | | Sector | ETF |
    |---|---|---|---|---|
@@ -23,11 +23,11 @@ thesis and its own structured reasoning.
    | Industrials | XLI | | Communication Services | XLC |
    | Consumer Discretionary | XLY | | Benchmark | SPY |
 
-   For each: 1-week, 1-month, 3-month, 6-month and year-to-date return; position vs
-   the 50- and 200-day moving average; distance from the 52-week high and low; and the
-   same returns relative to the benchmark. Also note how many sectors are above both
-   moving averages (breadth).
-2. **Macro** (`GetEconomicIndicator`; `GetLatestEconomicIndicators` for a quick view).
+   Each response gives you the returns, moving averages and 52-week range. Add the
+   returns relative to the benchmark (sector return minus SPY return) and breadth (how
+   many sectors are above both moving averages).
+2. **Macro** (`GetEconomicIndicator`, all series in one message;
+   `GetLatestEconomicIndicators` for a quick view). Send steps 2-4 together with step 1.
    Latest value, and the values one month and three months earlier:
 
    | Series | Meaning |

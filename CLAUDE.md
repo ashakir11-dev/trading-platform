@@ -20,7 +20,8 @@ Hard rules:
 
 Subagent pipeline: prompts in `prompts/`, subagents and commands in `.claude/`, run data in git-ignored
 `workspace/`. `.claude/hooks/workspace_guard.py` enforces the decisions firewall, the read-only tool rule and
-raw-data capture; keep `tests/test_workspace_guard.py` passing when changing it.
+raw-data capture, and turns price responses into statistics (`price_stats.py`, arithmetic only); keep
+`tests/test_workspace_guard.py` and `tests/test_price_stats.py` passing when changing them.
 
 Dev: `python -m venv .venv && . .venv/bin/activate && pip install -e '.[dev]' && pytest`
 Set `EQUIBLES_TEST_DSN` (a scratch UTF-8 Postgres database) to also run the Equibles SQL tests.

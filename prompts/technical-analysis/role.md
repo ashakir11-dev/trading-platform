@@ -28,13 +28,17 @@ Pick the horizon, from the profile's allowed ones, that this setup actually suit
 | `long_term` | months to years | weekly, 5 years | daily, 1 year | 30 days |
 
 Read entry, stop and target from the **primary** chart; use the context chart for the
-trend. Weekly bars: if `GetStockPrices` has no weekly interval, build them from daily
-bars (week's first open, highest high, lowest low, last close, summed volume).
+trend. `GetStockPrices` is daily only (at most 500 rows per call); each response comes
+back as statistics plus swing highs/lows and the weekly bars built from it. For
+`long_term`, fetch 5 years as three date-ranged calls of about 20 months each, in one
+message.
 
 ## Data to gather
 
+Send steps 1-4 together in one message.
+
 1. **Bars** (`GetStockPrices`) for the charts your horizon needs, up to `as_of`.
-2. **Indicators** as useful: `GetAverageTrueRange` (volatility, stop distance),
+2. **Indicators** as useful (ATR14 is already in the price statistics): `GetAverageTrueRange` (volatility, stop distance),
    `GetBollingerBands`, `GetStochasticOscillator`, `GetOnBalanceVolume`. Or compute
    them from the bars, showing the inputs.
 3. **Current price** for the stale-entry rule: `GetLiveQuote` (15-min delayed on Plus);
