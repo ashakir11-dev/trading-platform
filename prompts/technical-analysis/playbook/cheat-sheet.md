@@ -23,7 +23,7 @@ Knockouts: stage 3/4; stop > `max_loss`; major resistance < 2R, no clean break; 
 |---|---|---|---|---|
 |Hold / max hold (renewals)|3-15 sessions / 15 bars (1)|2-8 wk / 40 bars (1)|2-6 mo / 26 wk (1)|6 mo+ / 52 wk per plan (unlimited)|
 |Charts primary / context|D 6 mo / W 1 yr|D 1 yr / W 2 yr|W 2 yr + D / W-M 5 yr|W 5 yr / M 10 yr|
-|`horizon`, `chart_timeframe`, earnings window|swing, 1d, 45 d|swing, 1d, 45 d|swing if max hold <= ~13 wk else long_term; 1w; 45/30 d|long_term, 1w, 30 d|
+|`horizon`, `chart_timeframe` (earnings: scan to `max_hold_until`)|swing, 1d|swing, 1d|swing if max hold <= 65 sessions else long_term; 1w|long_term, 1w|
 |Trigger; breakout RVOL|D close > P + b; >= 1.5|same; >= 1.4|W close > P + b; week >= 1.2|same, or OBV 26-wk high|
 |Max extension at entry|d <= 3 vs EMA21|d <= 5 vs SMA50|d <= 3 wATR vs 10-wk|<= 40% over 40-wk|
 |Stop buffer / width / min|0.25-0.5 / 1.5-2.5 / 0.75 ATR|0.5-1 / 2-3.5 / 1 ATR|0.25-0.5 / 1-2 wATR + D hard stop|0.5 / 1.5-3 wATR + hard stop|
@@ -58,7 +58,9 @@ Choose (`05` 11): allowed horizon -> structure duration nominates the type -> co
 
 At 0.75 x MM, 2R needs R <= ~0.375 x MM; throwback holding closes >= P - 0.5 ATR = hold. Also: HTF (+90% in <= 8 wk, 3-5 wk flag 10-25%; its low usually > 8% away) [P, C]; 3WT (3 weekly closes within 1-1.5%: entry/add), ascending base, rising channel [C]; rectangle, sym. triangle (break with trend only) [A, P]; falling wedge (close > upper line and last LH, stop wedge low) [C, P]; pocket pivot, NR7/inside bar = triggers, cancel after 3-5 bars [C]; triple bottom (0.5 x height) [P]; rounding bottom (weekly) [C, P]. Double top, H&S top, bear flag, rising wedge, island top, broadening = exit cues [P; A for H&S, double top]; descending triangle: bust only; 1-2-3 step 1 [C] and a lone key reversal [S] are not buys.
 
-## 4. Setups (`04`; one per plan, name its ID; trade_types: section 2 last row)
+## 4. Setups (`04`; one per plan: role.md `setup` label, ID in `## Setup`; trade_types: section 2 last row)
+
+role.md labels: S1 `pullback`, S2 `breakout_retest`, S3 `base_breakout`, S4 `momentum`, S5 `52w_high_breakout`, S6 `stage2_breakout`, S7 `trend_following`, S8 filter only (never the setup), S9 `squeeze`, S10 `oversold_dip`, S11 `range`, S12 `spring`, S13 `post_earnings_drift`, S14 `gap_fill`, S15 `capitulation_reversal`.
 
 |ID|Setup|Trigger|Stop|T1|Clock|
 |---|---|---|---|---|---|
@@ -92,7 +94,7 @@ risk_off: only grade-A S1/S2/S5, S4/S6 with RS highs, S10 leaders, S11 floor, S1
 - Triggers (IDs, not targets): T1 buy-stop P + b; T2 daily close > P + b; T3 weekly close; T4 zone limit; T5 RC after pullback; T6 retest; T7 anticipatory pilot; T8 gap; T9 reclaim. b >= 0.02 (ATR% > 4: 0.15-0.25 ATR; quiet short_swing 0.05); above round numbers.
 - Confirmations: RVOL; CLV >= 0; range >= 1 ATR; prior tightness; RS at 3-month (weekly types 52-week) high; within 10% (15%) of 52-week high; sector over rising SMA50. 5+ full tranche; 3-4 pilot or wait; <= 2 none.
 - Red flags: extended; RVOL >= 3 after > 25%; hype >= 2; report or binary event; past cap; resistance < e + 2R; risk_off; weak bar (wait); below falling SMA200; 4th+ base.
-- Stale cap = min((T1 + m s)/(1 + m), s/(1 - L/100)), rounded down: "do not fill above X"; by type also stale past 0.5 ATR / 1.0 ATR / 0.5 wATR / 0.5 wATR + 5% over P. Open above cap or below stop: cancel; breakaway gap above cap = new S13 plan after the close. Role `stale_entry` unchanged.
+- Stale cap = min((T1 + m s)/(1 + m), s/(1 - L/100)), rounded down: "do not fill above X"; by type also stale past 0.5 ATR / 1.0 ATR / 0.5 wATR / 0.5 wATR + 5% over P. Open above cap or below stop: cancel; breakaway gap above cap = new S13 plan after the close. Role `stale_entry` applies exactly this cap and ATR distance (without the +5% investment line: add it as a Risk).
 - All at once: short_swing, stop < 1.5 ATR, one trigger. Pilot 1/3-1/2: grade B, T7. 2/3 + 1/3: grade A, swing+. Zone tranches, one stop: weekly types.
 - Pyramid: add at close >= e + 0.5R or new trigger; add <= prior; stop raised so total risk <= initial; every fill state passes; <= 5% over P; none near reports, in risk_off, after close < P. No averaging down. Re-entry once per setup, fresh trigger, not same day.
 
@@ -117,8 +119,8 @@ risk_off: only grade-A S1/S2/S5, S4/S6 with RS highs, S10 leaders, S11 floor, S1
 
 ## 9. Must-haves and caveats
 
-- Plan: trade_type and setup ID (in `## Setup`); `entry_condition` with "valid until <date>" and "do not fill above <cap>"; stop arithmetic; `target` = T1 (+T2); `invalidation` with structure line, CP1, T1 deadline = min(max hold, 2E), max hold bars and latest date; scale-out, trail, report actions, worst gap. No expiry, time stop or max-hold date = reject. Stops only rise; losers never renewed.
-- Time (`08` 5-7): E = M3 (d/ATR / median ATR-per-bar of the last 2-4 legs), else M4 (pattern duration), else M2 5.5 x (d/ATR)^2 halved (low confidence); floor d/ATR. CP1 = min(E/3, default) >= bar 2; CP2 = min(2E/3, default). Reject if E > 2/3 max hold or k > 1.5. `## Plan` line: "Timeline: valid until | CP1 | CP2 | decide <date> before report | T1 by bar N | max hold bar N (latest <date>)".
+- Plan fields (role.md): `trade_type`, `setup` (+ S-ID in `## Setup`); `entry_condition` with "do not fill above <cap>"; `entry_tranches`; `entry_valid_until`; `stale_cap`; `stop`; `targets` [{price, exit_fraction}] (T1 first; mean reversion sums to 1); `trailing_stop`; `checkpoints` [{after_sessions, test, if_failed}] (CP1, CP2; a T1 deadline = min(max hold, 2E) as a third if useful); `max_hold_sessions`, `max_hold_until`; `expected_sessions_to_t1` (= E); `event_plan` (every report to `max_hold_until`); `invalidation`. Worst gap and regime in `## Risks considered`. Stops only rise; losers never renewed.
+- Time (`08` 5-7): E = M3 (d/ATR / median ATR-per-bar of the last 2-4 legs), else M4 (pattern duration), else M2 5.5 x (d/ATR)^2 halved (low confidence); floor d/ATR. CP1 = min(E/3, default) >= bar 2; CP2 = min(2E/3, default). Reject if E > 2/3 max hold or k > 1.5. Weekly types: E and checkpoints in weeks x 5 = sessions for role.md.
 - No drift: P(T1 first) = 1/(1 + R:R) [math]: the edge is trend, momentum or drift, never the ratio.
 
 ## Sources

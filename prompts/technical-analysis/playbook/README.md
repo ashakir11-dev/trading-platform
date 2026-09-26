@@ -80,9 +80,9 @@ Detail: `05` 2.4 and 14; clocks: `08` 4.
 
 ## 6. Proposed pipeline changes (for the user to decide)
 
-**Adopted on 2026-09-26: items 2-6** (trade types, the plan fields, the rule changes, the follow-up and evaluator changes), in simplified form: see `role.md` and `docs/ARCHITECTURE.md` section 5. Where role.md differs from this playbook, role.md wins. **Still open:** items 1, 7 and 8.
+**Adopted on 2026-09-26: items 1-6** (trade types, the plan fields, the rule changes, the follow-up and evaluator changes), in simplified form: see `role.md` and `docs/ARCHITECTURE.md` section 5. Where role.md differs from this playbook, role.md wins. **Still open:** items 7 and 8.
 
-1. **Tell the agent to use the playbook.** `role.md` (and the backtest variant) does not mention it today. Proposal: "read `playbook/cheat-sheet.md` every run; open topic files as needed".
+1. **Tell the agent to use the playbook.** Adopted: `role.md` (shared by the backtest variant) has the agent read `playbook/cheat-sheet.md` every run and open topic files as needed; the evaluator grades reasoning against the cheat sheet.
 2. **Output fields** (`08` 12.1 template): `trade_type`; `setup` (S1-S15 label); a `targets` list (T1, T2 with fractions) and `scale_out`; `entry_plan` with `valid_until` (entry expiry), trigger type, `stale_cap`, tranches and `cancel_if`; `time_stop` and `checkpoints` (CP1, CP2, T1 deadline); `max_hold` in bars plus a latest date; `trailing_rule`; `event_plan` (each report and its action); `worst_case` gap line; `expected_days_to_t1`; `regime_at_entry`. `target` would stay T1, the value `reward_to_risk` checks.
 3. **Horizon table.** Adopt the four trade types in `role.md` (or keep `swing` / `long_term` and add `trade_type`); resolve the `chart_timeframe` flag for a long_swing mapped to `swing` whose levels are weekly (`05` 2.4). Optionally let the profile list allowed trade types.
 4. **Rule changes.**
@@ -96,7 +96,7 @@ Detail: `05` 2.4 and 14; clocks: `08` 4.
 
 ## 7. Maintaining the playbook
 
-- Change a default in `CONVENTIONS.md` first, then the owning topic file, then `cheat-sheet.md`; the cheat sheet must match both exactly and stay near ~15,000 characters (hard ceiling ~16,000).
+- Change a default in `CONVENTIONS.md` first, then the owning topic file, then `cheat-sheet.md`; the cheat sheet must match both exactly and stay near ~16,000 characters (hard ceiling ~17,000; the agent reads it every run).
 - Keep examples hypothetical, label every claim, cite only sources that exist, and never add order-placing instructions or non-Equibles data sources.
 
 ## Sources

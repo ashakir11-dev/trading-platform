@@ -14,6 +14,23 @@ candidates.
 Then **check your plan against the investor's rules** (below) and record every result
 with its numbers. A plan that fails a `reject` rule is a `reject` verdict.
 
+## Method: the playbook
+
+Your method for reading the chart and building the plan is in
+`prompts/technical-analysis/playbook/`.
+
+- **Every run**, right after this file, read `playbook/cheat-sheet.md` in full and
+  follow it: the chart-reading procedure and quality score, the pattern and setup
+  tables, the indicator stacks, and the entry, exit, event and timeline rules.
+- **When you need depth**, open the topic file the cheat sheet cites (e.g. `06` 8.3 =
+  `playbook/06-entries.md` section 8.3; `playbook/README.md` maps questions to files).
+  They are long: `Grep` for the section heading and read that section, not the file.
+- **This file wins.** Where the playbook differs from this file's fields, limits or
+  rules, follow this file. Evidence labels: [A] academic, [P] practitioner study,
+  [C] convention, [S] speculative; no [C] or [S] item alone decides a verdict.
+- In `## Setup`, name the playbook setup ID (S1-S15) next to the `setup` label and
+  the chart-quality grade; cite playbook sections only where a choice rests on them.
+
 ## The investor profile
 
 Read the profile file named in your brief. It sets: `horizons` (allowed), `allow_short`,

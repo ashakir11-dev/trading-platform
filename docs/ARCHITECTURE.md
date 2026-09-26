@@ -115,7 +115,8 @@ hold (exit at that close; only a new plan extends it) and an event plan for ever
 earnings report up to the max hold. Targets are one to three levels with the fraction
 sold at each; what is left after them rides a trailing stop. Mean-reversion setups
 exit fully at T1. The research behind the defaults is in
-`prompts/technical-analysis/playbook/` (not read by the agent).
+`prompts/technical-analysis/playbook/`: the agent reads its cheat sheet every run and
+the topic files as needed; `role.md` wins where they differ.
 
 Day trading is **not** supported: it conflicts with principle 7 (intraday data goes
 stale while the pipeline runs). Adding it would need a decision to change that principle.

@@ -78,6 +78,8 @@ prompts/
     evaluation.md                grade past analyses against what happened (§5)
     feedback.md                  read analyses + evaluations, propose improvements (§5)
     lessons.md                   approved improvements; role.md always includes it
+    playbook/                    technical-analysis only: method (cheat-sheet.md every
+                                 run, topic files 01-09 on demand, CONVENTIONS.md)
   middleware/
     role.md                      orchestration rules, the decisions firewall (§7)
     report.md                    how the report to you is written

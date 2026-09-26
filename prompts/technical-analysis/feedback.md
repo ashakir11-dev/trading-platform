@@ -6,4 +6,6 @@ a rule limit that then failed, targets rarely reached (targets beyond resistance
 too far for the time?), time exits and failed checkpoints (expected time to T1 too
 optimistic? trade type too short?), large give-back (scale-out or trailing too loose?),
 setups or trade types that keep losing, and earnings inside the hold that decided the
-outcome. Lessons about level placement, timelines, scale-out and event risk are useful.
+outcome. Lessons about level placement, timelines, scale-out and event risk are useful. When a
+pattern points at a playbook rule or default itself (e.g. a setup's criteria keep
+failing), say so in the lesson; changing the playbook is the user's call.

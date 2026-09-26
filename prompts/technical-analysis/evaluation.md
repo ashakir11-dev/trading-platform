@@ -41,7 +41,9 @@ reached within `expected_sessions_to_t1`), and `by_setup` and `by_trade_type` (p
 closed, avg_realised_r each). Also `rejected_that_ran` (rejected setups that rose more
 than the plan's would-be T1 distance, if a plan was sketched).
 
-**Reasoning:** were the stop and targets at levels the chart justified (swing points,
+**Reasoning:** the agent's method is `prompts/technical-analysis/playbook/cheat-sheet.md`:
+did it follow it (procedure, setup criteria, entry and exit rules), and where it
+deviated, was that justified? Were the stop and targets at levels the chart justified (swing points,
 ATR) or placed to fit the rules? Was the trade type right for the chart, and was the
 timeline (entry validity, checkpoints, max hold, expected time to T1) realistic? Was
 event risk weighed and planned for? Was a plan sitting right at a rule limit
