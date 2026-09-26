@@ -51,7 +51,8 @@ def env_files(root: Path) -> list[Path]:
 
 def load_env(root: Path, environ: dict[str, str] | None = None) -> list[Path]:
     """Load ``.env`` at the root, then ``~/.trading-platform/env``, into ``environ``
-    (default: ``os.environ``) without overriding what is already set. Returns the
+    (default: ``os.environ``) without overriding what is already set; empty values are
+    skipped. Returns the
     files that were read."""
     environ = os.environ if environ is None else environ
     read = []
@@ -59,6 +60,7 @@ def load_env(root: Path, environ: dict[str, str] | None = None) -> list[Path]:
         if not path.is_file():
             continue
         for key, value in parse_env(path.read_text(encoding="utf-8")).items():
-            environ.setdefault(key, value)
+            if value:   # the template's empty `KEY=` lines set nothing
+                environ.setdefault(key, value)
         read.append(path)
     return read

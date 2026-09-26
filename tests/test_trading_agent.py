@@ -70,10 +70,19 @@ not a line
 
 def test_load_env_never_overrides(tmp_path, monkeypatch):
     monkeypatch.setattr(env, "USER_ENV_FILE", tmp_path / "missing")
-    (tmp_path / ".env").write_text("A=from-file\nB=from-file\n")
+    (tmp_path / ".env").write_text("A=from-file\nB=from-file\nC=\n")
     environ = {"A": "from-env"}
     assert env.load_env(tmp_path, environ) == [tmp_path / ".env"]
     assert environ == {"A": "from-env", "B": "from-file"}
+
+
+def test_empty_values_do_not_shadow_the_user_file(tmp_path, monkeypatch):
+    monkeypatch.setattr(env, "USER_ENV_FILE", tmp_path / "user-env")
+    (tmp_path / ".env").write_text("EQUIBLES_API_KEY=\n")
+    (tmp_path / "user-env").write_text("export EQUIBLES_API_KEY=k\n")
+    environ = {}
+    env.load_env(tmp_path, environ)
+    assert environ == {"EQUIBLES_API_KEY": "k"}
 
 
 def test_find_root(tmp_path, monkeypatch):
