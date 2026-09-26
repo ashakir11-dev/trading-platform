@@ -17,12 +17,15 @@ Record the user's decision. Arguments: $ARGUMENTS
    decided once.
 3. Write `workspace/decisions/<candidate_id>.md` in the format of `prompts/formats.md`,
    with `decided_at` = now, the note verbatim under "Why", and an empty trade log.
-4. On `accept`: create `workspace/positions/<candidate_id>/position.md` from the
-   technical analysis plan the recommendation points to (entry, stop, target, horizon,
-   direction) and the profile's `level_trigger`, with `status: open` and `opened` empty
-   until the user reports the trade. Trade facts only: never the note.
+4. On `accept`: create `workspace/positions/<candidate_id>/position.md` (format in
+   `prompts/formats.md`) from the technical analysis plan the recommendation points to
+   (direction and every plan field: trade type, setup, entry and tranches, entry valid
+   until, stale cap, stop, targets, trailing stop, checkpoints, max hold, event plan)
+   and the profile's `level_trigger`, with `status: open`, `stop_in_force` = the stop,
+   and `opened` empty until the user reports the trade. Trade facts only: never the note.
    On `reject`: nothing else is created.
 5. Confirm in two lines what was recorded and, on accept, that the position is now
-   watched and that the user places the trade themselves.
+   watched, that the user places the trade themselves, and that the entry expires after
+   `entry_valid_until`.
 
 The decision and note never go into any other file.

@@ -50,9 +50,9 @@ Step-by-step runtime flow (sequence diagrams): [`sequence-diagrams.md`](sequence
 | Agent 0: Market Scanner | `market-scanner` | once per run | sector ETF performance + macro data | sectors with upside/downside potential |
 | Agent 1: Sector Deep Dive | `sector-deep-dive` | one per sector, in parallel | sector call + **bulk screen of the sector's companies** (ratios, size, prices, recent filings/events) + breadth, FDA, earnings | shortlist **ranked by potential score** |
 | Company Deep Dive | `company-deep-dive` | one per company, in parallel | shortlist entry + market/sector/macro data + **full company data** (fundamentals, filings, guidance, estimates, transcripts, insider and short data) | worthiness verdict; catalysts checked |
-| Technical Analysis | `technical-analysis` | one per company, in parallel, **no cross-comparison** | candidate + **investor profile** + price statistics, swing levels and weekly bars for the horizon's charts + earnings date | chart verdict + entry / stop / target / horizon / chart timeframe, or rejection; then the **profile's rules** |
+| Technical Analysis | `technical-analysis` | one per company, in parallel, **no cross-comparison** | candidate + **investor profile** + price statistics, swing levels and weekly bars for the trade type's charts + earnings dates to the max hold | chart verdict + a **time-bound plan** (trade type, setup, entry and tranches, stop, targets with scale-out, trailing stop, entry expiry, checkpoints, max hold, event plan), or rejection; then the **profile's rules** |
 | Middleware | the commands in `.claude/commands/` | orchestrates | | report to the user; records the user's decisions |
-| Agent 5: Follow-Up | `follow-up` | on a schedule, per accepted position | position + profile + fresh data + every earlier analysis | tripwire checks (price vs stop/target, **material** news only) with a **12h alert cooldown**, plus a full re-review on alert or every 14 days |
+| Agent 5: Follow-Up | `follow-up` | on a schedule, per accepted position | position + profile + fresh data + every earlier analysis | tripwire checks (entry, stop, targets, trailing stop, checkpoints, max hold, events; **material** news with a **12h cooldown**), plus a full re-review on alert or on the trade type's cadence |
 | Evaluation | `stage-evaluator` | per agent and past run | the agent's analyses + prices since | **outcome facts** (no judgment), then **reasoning-quality grades** with an attribution per miss |
 | Feedback | `stage-feedback` | per agent, on request | the agent's evaluations | proposed lessons; added to prompts only after the user approves |
 
@@ -97,14 +97,25 @@ front, not a decision, so showing it to agents does not break the one-way middle
 principle. The technical agent and Agent 5's full review read it, and the rules
 enforce it.
 
-**Horizons and chart timeframes.** Each horizon has its own charts; the technical
-agent reads levels from the primary chart and trend from the context chart, and
-fetches every timeframe the profile's horizons need.
+**Trade types, horizons and chart timeframes.** The profile allows *horizons*; the
+technical agent picks one of four *trade types* within them. Each has its own charts and
+clocks; the agent reads levels from the primary chart and trend from the context chart.
+Sessions are NYSE trading days (1 week = 5 sessions).
 
-| Horizon | Typical hold | Primary chart | Context chart | Earnings flag window |
-|---|---|---|---|---|
-| `swing` | weeks to ~3 months | 1d, 1 year | 1w, 2 years | 45 days |
-| `long_term` | months to years | 1w, 5 years | 1d, 1 year | 30 days |
+| Trade type | Typical hold | Horizon | Primary chart | Context chart | Entry valid | Max hold | Re-review every |
+|---|---|---|---|---|---|---|---|
+| `short_swing` | 3-15 sessions | `swing` | 1d, 6 months | 1w, 1 year | 5 sessions | 15 sessions | 3 sessions |
+| `swing` | 2-8 weeks | `swing` | 1d, 1 year | 1w, 2 years | 10 sessions | 40 sessions | 5 sessions |
+| `long_swing` | 2-6 months | `swing` if max hold ≤ 65 sessions, else `long_term` | 1w, 2 years | 1w, 5 years | 20 sessions | 130 sessions | 10 sessions |
+| `investment` | 6 months and more | `long_term` | 1w, 5 years | 1M, 10 years | 40 sessions | 260 sessions | 20 sessions |
+
+**No trade is open-ended.** Every plan carries an entry expiry (`entry_valid_until`),
+progress checkpoints (sessions after the fill, each with the action if it fails), a max
+hold (exit at that close; only a new plan extends it) and an event plan for every
+earnings report up to the max hold. Targets are one to three levels with the fraction
+sold at each; what is left after them rides a trailing stop. Mean-reversion setups
+exit fully at T1. The research behind the defaults is in
+`prompts/technical-analysis/playbook/` (not read by the agent).
 
 Day trading is **not** supported: it conflicts with principle 7 (intraday data goes
 stale while the pipeline runs). Adding it would need a decision to change that principle.
@@ -118,14 +129,18 @@ a judgment failure. `reject` removes the candidate; `flag` warns the user in the
 
 | Rule | Outcome | When |
 |---|---|---|
-| `plan_price_order` | reject | long needs stop < entry < target; short the reverse |
-| `profile_horizon` | reject | plan horizon not in the profile's horizons |
-| `chart_timeframe` | flag | plan levels not read from the horizon's primary chart |
+| `plan_price_order` | reject | long needs stop < entry < T1 < T2 < T3 (tranches above the stop); short the reverse |
+| `profile_horizon` | reject | the trade type's horizon not in the profile's horizons |
+| `chart_timeframe` | flag | plan levels not read from the trade type's primary chart |
 | `profile_short` | reject | short plan when shorts are not allowed; downside sector calls are then not pursued |
-| `max_loss` | reject | stop further from entry than `max_loss_per_trade_pct` |
-| `reward_to_risk` | reject | reward:risk below `min_reward_to_risk` |
-| `stale_entry` | reject | price already more than `stale_entry_max_drift_pct` (3%) past the entry, or through the stop. Live runs use the live quote; backtests use the last close at `as_of`. A price that hasn't reached the entry yet is fine. |
-| `upcoming_earnings` | flag | earnings inside the horizon's window, or the date is unknown |
+| `max_loss` | reject | stop further from entry than `max_loss_per_trade_pct`, in any tranche fill state |
+| `reward_to_risk` | reject | reward:risk to **T1** below `min_reward_to_risk`, in any tranche fill state |
+| `scale_out` | reject | exit fractions not > 0 or summing past 1; a remainder without a trailing stop; a mean-reversion setup keeping a runner |
+| `stale_entry` | reject | price through the stop, or past the entry and either above the **stale cap** (the highest fill at which max loss and reward:risk still pass) or further than the trade type's ATR distance (0.5-1 ATR). Live runs use the live quote; backtests use the last close at `as_of`. A price that hasn't reached the entry yet is fine. |
+| `time_limits` | reject | entry expiry, checkpoints or max hold missing or beyond the trade type's limits, or expected time to T1 above ⅔ of the max hold |
+| `reachability` | reject | T1 too far for the time: (T1 − entry) / (0.63 × ATR × √max-hold) > 1.5 |
+| `liquidity` | reject | `short_swing`/`swing` with 20-day average dollar volume below $5M |
+| `upcoming_earnings` | flag / reject | reject a report before the max hold with no event-plan entry, or any report inside a `short_swing` hold; otherwise flag each report up to the max hold and any unknown or estimated date |
 
 **Conflicts:** when the same ticker comes from
 more than one sector call, it is **always recorded**, as `direction_conflict` (opposite
@@ -136,13 +151,18 @@ in the report.
 a hit only when a bar *closes* beyond the level; `intraday` counts it as soon as the bar's
 low/high touches it. The follow-up agent and the evaluator use the same definition.
 
-**Alerts** (Agent 5). A tripwire fires on price hitting the stop or target (per
-`level_trigger`), or on **material** news. The follow-up agent keeps SEC 8-Ks with material
-items (e.g. 1.01, 2.02, 5.02), earnings, guidance, FDA, M&A, rating changes, offerings,
-legal and leadership news, and drops price-action chatter, reiterations and listicles.
-Each alert triggers a full re-review. After an alert, further alerts for the same
-position are **held for 12 hours**. Anything that trips meanwhile is
-recorded and delivered with the next alert, so nothing material is lost.
+**Alerts** (Agent 5). Tripwires fire on price (entry triggered, missed or expired; the
+stop in force; each target; the trailing stop; the next tranche), on clocks (a failed
+checkpoint, the max hold, an event-plan date two sessions ahead) and on **material**
+news. The follow-up agent keeps SEC 8-Ks with material items (e.g. 1.01, 2.02, 5.02),
+earnings, guidance, FDA, M&A, rating changes, offerings, legal and leadership news, and
+drops price-action chatter, reiterations and listicles. Price and clock alerts carry an
+action on a price or a date and are **always delivered at once**. After a delivered news
+alert, further news alerts for the same position are **held for 12 hours**, recorded,
+and delivered with the next alert, so nothing material is lost. Each delivered alert
+triggers a full re-review; otherwise the re-review runs on the trade type's cadence. A
+re-review never extends a losing trade's time or risk: a longer max hold or a wider stop
+is a new plan, checked against every rule from the current price.
 
 ## 5. Design decisions
 
@@ -174,6 +194,16 @@ recorded and delivered with the next alert, so nothing material is lost.
 | Rules and outcomes (D3) | In prompts; the middleware recomputes the plan arithmetic. |
 | Forward testing | Every live run is graded by the evaluators as outcomes arrive, including candidates nobody traded: the "shadow ledger" of [`testing-research.md`](testing-research.md), Phase 0. |
 | Models (D5, revisited) | Per agent, in `.claude/agents/` (design doc §11). |
+
+**Decided (2026-09-26, time-bound plans):**
+
+| Decision | Choice |
+|---|---|
+| Trade types | **Four trade types** (`short_swing`, `swing`, `long_swing`, `investment`) inside the profile's `swing` / `long_term` horizons, each with its charts and clocks. |
+| Plan format | Trade type, setup label, optional entry tranches, **one to three targets with exit fractions** and a trailing stop for the rest, entry expiry, checkpoints, max hold and an event plan. `reward_to_risk` is checked on T1. |
+| Rules | `stale_entry` uses the plan's stale cap and an ATR distance instead of a fixed 3%; `upcoming_earnings` scans to the max hold; new `scale_out`, `time_limits`, `reachability` and `liquidity` rules. The middleware recomputes all the arithmetic ones. |
+| Follow-up | Price and clock alerts bypass the 12h cooldown (news only); re-review cadence by trade type; positions record partial fills and exits (`/trade ... [fraction]`). |
+| Evaluation | Plans are walked forward as written: entries expire, targets and trailing stops exit their fractions, checkpoints act, and whatever is left closes at the max hold as a time exit with realised R; graded by setup and trade type. |
 
 **Open:**
 

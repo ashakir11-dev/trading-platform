@@ -71,7 +71,7 @@ sequenceDiagram
     par one per open position
         MW->>A5: brief (position, last check, cooldown state)
         A5->>WS: read position, plan, earlier analyses
-        Note over A5: tripwires: stop/target, missed entry,<br/>material news; 12h cooldown;<br/>full re-review on alert or every 14 days
+        Note over A5: tripwires: entry, stop, targets, trail,<br/>checkpoints, max hold, events; news with 12h cooldown;<br/>full re-review on alert or on the trade type's cadence
         A5->>WS: output.md
     end
     MW->>WS: position state, alerts.md

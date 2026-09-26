@@ -92,7 +92,7 @@ status: running               # running | complete | failed
 - <candidate_id>: <sector>, <long|short>, potential_score <n>
 
 ## Recommendations
-- <candidate_id>: <entry / stop / target / horizon>   (from the technical-analysis stage)
+- <candidate_id>: <trade_type, setup / entry / stop / targets / entry valid until / max hold until>   (from the technical-analysis stage)
 
 ## Errors
 - <agent> <subject>: <what failed>
@@ -121,29 +121,53 @@ position_id: 20260925T213314Z-XOM   # accept only
 
 ## positions/<position_id>/position.md
 
-Trade facts only: no decision text, notes or reasoning of the user.
+Trade facts only: no decision text, notes or reasoning of the user. The plan fields are
+copied from the technical analysis's `plan` when the position is created.
 
 ```markdown
 ---
 position_id: 20260925T213314Z-XOM
 ticker: XOM
 direction: long
-opened: 2026-09-26            # the user's entry date, once known
-entry: 118.40                 # planned, then the actual price once traded
-stop: 111.00
-target: 134.00
+trade_type: swing
+setup: base_breakout
 horizon: swing
 level_trigger: close
 status: open                  # open | closed
+opened: null                  # the date of the user's first fill
+planned_entry: 118.40
+entry: null                   # blended price of the user's fills, once traded
+entry_tranches: null
+entry_valid_until: 2026-10-09
+stale_cap: 118.66
+stop: 111.00                  # the initial stop
+stop_in_force: 111.00         # after trailing or checkpoint actions (from follow-up)
+targets:
+  - {price: 134.00, exit_fraction: 0.5}
+  - {price: 142.00, exit_fraction: 0.25}
+targets_hit: []               # e.g. [T1], from follow-up
+trailing_stop: "after T1: stop to 118.40; then daily close below EMA21"
+checkpoints:
+  - {after_sessions: 10, test: "best close since fill >= 122.10 (e + 0.5R)", if_failed: "sell half; stop to the last higher low"}
+  - {after_sessions: 20, test: "close >= 125.80 (e + 1R) or a new swing high", if_failed: "stop to 118.40, or exit"}
+max_hold_sessions: 40
+max_hold_until: 2026-12-07
+event_plan:
+  - {date: 2026-10-30, event: "Q3 earnings (confirmed, before the open)", action: "..."}
+fills: []                     # [{date, price, fraction}] fraction of the full planned size
+exits: []                     # [{date, price, fraction}]
 closed: null
-exit_price: null
+exit_price: null              # blended price of all exits, once closed
 plan: workspace/agents/technical-analysis/analyses/<run_id>/XOM
 last_check: null              # follow-up state, kept by the middleware agent
 last_full_review: null
-last_alert_at: null
+last_alert_at: null           # last delivered material-news alert (the cooldown)
 held_alerts: []
 ---
 ```
+
+Positions created before these fields existed have a single `target`, no trade type
+and no clocks; treat `target` as T1 with `exit_fraction: 1` and use a 14-day re-review.
 
 `positions/<position_id>/alerts.md`: one line per alert,
 `- <as_of> <delivered|held> <kind>: <detail> (run <run_id>)`.

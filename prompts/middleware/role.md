@@ -95,17 +95,28 @@ run's `profile.json`. Task: `Candidate <candidate_id>: <TICKER>, <long|short>.`
 
 **Recommendation check.** Read the technical frontmatter. The candidate is recommended
 only if `verdict: pass`, a `plan` is present and no rule has `outcome: reject`. Before
-listing it, recompute from the plan's numbers and the profile:
+listing it, recompute the arithmetic rules from the plan's numbers and the profile
+(definitions in `prompts/technical-analysis/role.md`; L = `max_loss_per_trade_pct`,
+m = `min_reward_to_risk`; with `entry_tranches`, every fill state):
 
-- price order: long s < e < t, short t < e < s;
-- max loss: |e − s| / e × 100 ≤ `max_loss_per_trade_pct`;
-- reward:risk: |t − e| / |e − s| ≥ `min_reward_to_risk`.
+- price order: long s < e < T1 < T2 < T3, short mirrored;
+- max loss: |E − s| / E × 100 ≤ L;
+- reward:risk: |T1 − E| / |E − s| ≥ m;
+- scale-out: exit fractions > 0 summing to ≤ 1, a `trailing_stop` when < 1;
+- stale entry: the stale cap from s and T1, and the current price against e, the cap
+  and the ATR distance;
+- time limits: `entry_valid_until` after `as_of` and within the trade type's validity;
+  checkpoints < `max_hold_sessions` ≤ the trade type's max hold;
+  `expected_sessions_to_t1` ≤ ⅔ × `max_hold_sessions`;
+- reachability: |T1 − e| / (0.63 × ATR × √N) ≤ 1.5, with the plan's `atr`;
+- liquidity (`short_swing`, `swing`): `dollar_volume_20d` ≥ $5M.
 
 If your numbers disagree with the agent's rule results, do not recommend: record the
 candidate under "Not pursued" as `rule check mismatch: <rule>, agent <x>, recomputed <y>`.
-Otherwise list it under "Recommendations" with entry / stop / target / horizon and
-every `flag`. Rejected candidates go under "Not pursued" with the failing rule or the
-agent's reason.
+Otherwise list it under "Recommendations" with trade type, setup, entry (and tranches),
+stop, targets with exit fractions, trailing stop, entry valid until, checkpoints, max
+hold until, the event plan and every `flag`. Rejected candidates go under "Not pursued"
+with the failing rule or the agent's reason.
 
 ## Finishing
 

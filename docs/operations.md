@@ -64,7 +64,8 @@ and saved to `workspace/runs/<run_id>/report.md`; each recommendation shows its
 /decide <candidate_id> accept "half size"     # or: reject
 /trade <position_id> entered 118.40           # when you have actually bought
 /follow-up                                    # one tick over open positions (schedule it)
-/trade <position_id> exited 131.10 2026-10-30 # when you have exited
+/trade <position_id> exited 134.10 2026-10-20 0.5  # sold half at T1
+/trade <position_id> exited 131.10 2026-10-30 # when you have exited the rest
 /evaluate                                     # grade runs at least a week old
 /feedback <agent>                             # propose lessons for one agent
 /approve <agent> <proposal_id>                # or: ... reject
@@ -73,14 +74,17 @@ and saved to `workspace/runs/<run_id>/report.md`; each recommendation shows its
 1. **Decide.** Only recommended candidates can be decided, once each. `accept` opens a
    watched position from the technical plan (`position_id` = `candidate_id`); you place
    the trade yourself. `reject` is recorded and nothing is watched.
-2. **Trade.** Record your actual entry and exit; only the prices and dates reach the
-   position file.
-3. **Follow up.** Each tick checks every open position: price against stop and target
-   (per the profile's `level_trigger`), a missed entry, and material news. A delivered
-   alert, or 14 days since the last one, triggers a full re-review (hold / adjust plan /
-   exit). Alerts for a position are held for 12 hours after the previous one and
-   delivered together afterwards. When a stop or target is hit, or a re-review says
-   exit, the output starts with **ACTION NEEDED**.
+2. **Trade.** Record your actual entries and exits, in full or in part
+   (`/trade <id> entered|exited <price> [date] [fraction]`); only the prices, dates and
+   fractions reach the position file.
+3. **Follow up.** Each tick checks every open position: the entry (triggered, missed or
+   expired), the stop in force, each target and the trailing stop (per the profile's
+   `level_trigger`), the plan's clocks (checkpoints, max hold, earnings in the event
+   plan) and material news. Price and clock alerts are delivered at once; news alerts
+   are held for 12 hours after the previous one and delivered together afterwards. A
+   delivered alert, or the trade type's cadence (3 / 5 / 10 / 20 sessions), triggers a
+   full re-review (hold / adjust plan / exit). When an alert asks you to act, or a
+   re-review says exit, the output starts with **ACTION NEEDED**.
 4. **Evaluate.** Grades each agent's past calls against what happened since: outcome
    facts, and separately the quality of its reasoning with an attribution (foreseeable
    miss, data gap, black swan, normal variance). After the agents' results, you see a

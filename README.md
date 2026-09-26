@@ -38,9 +38,9 @@ upstream call.
 | **market-scanner** | Reads sector ETF performance and macro data; names sectors with upside or downside potential. |
 | **sector-deep-dive** | One per sector: screens the sector's largest companies into a shortlist ranked by a 0-100 potential score. |
 | **company-deep-dive** | One per candidate: checks fundamentals and verifies each claimed catalyst against filings and news. |
-| **technical-analysis** | One per candidate: reads the charts for your horizon, proposes entry, stop, target and horizon, applies your profile's rules, or rejects. |
+| **technical-analysis** | One per candidate: picks a trade type within your horizons, reads its charts and proposes a time-bound plan (entry, stop, one to three targets with scale-out, entry expiry, checkpoints, max hold, event plan), applies your profile's rules, or rejects. |
 | **middleware** | Runs the stages, applies the forwarding rules, re-checks each plan's numbers, reports to you, records your decisions. |
-| **follow-up** | Watches accepted positions: stop/target and material-news alerts (12h cooldown), full re-review on alert or every 14 days. |
+| **follow-up** | Watches accepted positions: entry, stop, target, trailing-stop and time alerts (checkpoints, max hold, earnings), material-news alerts (12h cooldown), full re-review on alert or on the trade type's cadence. |
 | **stage-evaluator / stage-feedback** | Grade each agent's past calls (outcome facts and, separately, reasoning quality) and propose lessons. |
 | **gatekeeper / pit-auditor** | Backtests only: build and audit point-in-time data packs. |
 
@@ -136,7 +136,7 @@ Inside `claude` in the repository:
 | `/run --max-sectors 1 --shortlist 3` | A small live run; `/run` for a full one (after the close) |
 | `/run-agent <agent> <subject> [--as-of DATE]` | One agent on its own, e.g. `/run-agent company-deep-dive NVDA` |
 | `/decide <candidate_id> accept\|reject [note]` | Record your decision; accept opens a watched position |
-| `/trade <position_id> entered\|exited <price> [date]` | Record your actual entry or exit |
+| `/trade <position_id> entered\|exited <price> [date] [fraction]` | Record your actual entry or exit, in full or in part |
 | `/follow-up` | One follow-up tick over open positions (schedule it) |
 | `/evaluate [--run ID] [--agent A]` | Grade past runs; your own decision reviews shown in chat |
 | `/feedback <agent>` | Propose lessons from an agent's evaluations |

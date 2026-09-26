@@ -269,27 +269,12 @@ The profile has no account size and role.md no size field: give a formula, never
 
 ## 11. Review cadence and the follow-up agent
 
-### 11.1 How the pipeline watches a position today
+### 11.1 How the pipeline watches a position (adopted 2026-09-26)
 
-- `/follow-up` ticks at 10:00, 12:00, 14:00 and 16:15 New York on weekdays (docs/operations.md). Tripwires: stop, target, missed entry (price > 3% past entry, or through the stop, before a fill), material news. Alerts within 12 hours of the last alert are held. A full re-review runs on a delivered alert or every 14 days and recommends `hold`, `adjust_plan` (a complete new plan passing role.md rules: where renewals and graduations land) or `exit`.
+- `/follow-up` ticks at 10:00, 12:00, 14:00 and 16:15 New York on weekdays (docs/operations.md). Tripwires: entry triggered, missed (past the stale cap or through the stop) or expired (`entry_valid_until`); the stop in force; each target with its exit fraction; the trailing stop after T1; the next tranche; failed checkpoints; the max hold; event-plan dates two sessions ahead; material news. Price and clock alerts are always delivered; only news alerts are held for 12 hours. A full re-review runs on a delivered alert or every 3 / 5 / 10 / 20 sessions by trade_type and recommends `hold`, `adjust_plan` (a complete new plan passing role.md rules, checked from the current price when it extends time or risk) or `exit`.
 - Under `level_trigger: close`, only the 16:15 tick confirms a stop, target or checkpoint; midday ticks are warnings.
-
-### 11.2 Mapping and gaps
-
-| | short_swing | swing | long_swing | investment |
-|---|---|---|---|---|
-| 14-day re-review vs needed cadence (4) | too slow: a 15-bar trade may get one | too slow | adequate for the deep review | adequate |
-| Checkpoints, time stops | not tripwires: put them in `invalidation` (any re-review applies them) and the Timeline line for the human | same | same | same |
-| 12h cooldown | a 10:00 news alert holds a 16:15 stop alert to next morning | same | lower impact | lower impact |
-| Earnings | material news triggers a re-review only AFTER the report: the pre-report decision must be in the plan text | same | same | same |
-
-### 11.3 Proposed extensions (not implemented; do not assume)
-
-1. Alert kind `time` for `valid_until`, progress bar, CP1, CP2, T1 deadline, max hold and the pre-report decision date.
-2. Stop, target and max-hold alerts bypass the 12h cooldown.
-3. Full re-review interval per trade_type: 3 / 5 / 10 / 20 sessions.
-4. Evaluator closes a filled plan with no stop or target hit at its `max_hold_date` close (`time_exit`, realised R); today it stays `open` / `worked: null`.
-5. Position file carries `trade_type`, `valid_until`, `max_hold_date`, checkpoints, tranches and scale-out.
+- The evaluator walks each plan forward as written and closes what is left at the max hold as a `time_exit` with realised R.
+- Not adopted: a separate T1 deadline alert and the watch expiry; express a T1 deadline as a checkpoint.
 
 ## 12. Trade plan template
 
@@ -346,18 +331,21 @@ plan:
   renewal: {parent_plan: null, renewal_count: 0}              # [proposed]
 ```
 
-### 12.2 What the current output supports
+### 12.2 What role.md's output carries (adopted 2026-09-26)
 
-| Current field (role.md) | Carries today |
+| This template | role.md field |
 |---|---|
-| `entry`, `entry_condition` | first trigger + "valid until <date>" + "void if filled above <ceiling>" + tranche text |
-| `stop` | initial stop |
-| `target` | T1 only; T2/T3 and scale-out in `## Plan` |
-| `horizon`, `chart_timeframe` | mapped from trade_type (4) |
-| `invalidation` | structural line + progress stop + "T1 by bar N" + "max hold N bars (latest <date>)" |
-| rules | unchanged: `reward_to_risk` on T1; `upcoming_earnings` uses the horizon window, but check events through the latest max-hold date and flag in `## Risks considered` |
-
-Everything else is proposed: one line per item in `## Plan` ("Type:", "Timeline:", "Events:", "Scale-out:", "Worst case:").
+| trade_type, setup | `trade_type`, `setup` (role.md's setup names; S-IDs map to them) |
+| entry trigger, condition, tranches | `entry`, `entry_condition`, `entry_tranches` |
+| valid_until, stale cap | `entry_valid_until`, `stale_cap` |
+| initial stop | `stop` |
+| T1/T2/T3, scale-out | `targets` [{price, exit_fraction}]; `reward_to_risk` on T1 |
+| trailing rule | `trailing_stop` |
+| CP1, CP2 (and a T1 deadline) | `checkpoints` [{after_sessions, test, if_failed}] |
+| max hold | `max_hold_sessions`, `max_hold_until` (= valid_until + max hold) |
+| expected days to T1 | `expected_sessions_to_t1` |
+| event plan | `event_plan` [{date, event, action}] |
+| regime, worst case, blended R | `## Plan` / `## Risks considered` text |
 
 ## 13. Filled examples (hypothetical)
 

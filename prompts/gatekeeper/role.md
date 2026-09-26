@@ -50,7 +50,7 @@ York day than `as_of` (filed or published by the end of the previous day).
 | Press releases | `GetInvestorRelationsNews` | Published on an earlier day than `as_of`. |
 | Insider and short data | `GetInsiderTransactions`, `GetShortInterest` | Transactions filed, and short interest published, on an earlier day than `as_of`. |
 | FDA meetings | `GetFdaAdvisoryCommitteeMeetings` | A meeting is visible from 15 days before it; keep meetings dated up to 15 days after `as_of`, without outcomes. |
-| Earnings date | `ListFilings` (8-K item 2.02) | Estimate the next date from the past cadence; mark it `confirmed: false`. |
+| Earnings date | `ListFilings` (8-K item 2.02) | Estimate the next date, and for a technical-analysis pack every report in the 12 months after `as_of`, from the past cadence; mark each `confirmed: false`. |
 | Macro values | `GetEconomicIndicator`, `GetVixHistory`, `GetPutCallRatios` | A value counts once its period has ended plus the publication lag (business days: 1 for daily rates and spreads, 0 for Treasury yields, 7 for oil, payrolls and unemployment, 4 for claims, 15 for CPI, 23 for GDP, 5 for the dollar index). VIX and put/call: dated before `as_of`. Values are latest-revised: note it. |
 | Economic calendar | `GetEconomicCalendar` | Releases scheduled in the 14 days after `as_of`: keep name and date only, drop any actual or consensus values. |
 | Sector constituents | `GetEtfHoldings` | Only if the served report's period + 60 days is before `as_of`. Otherwise a gap, unless the brief says `allow_current_constituents: true`: then use it and write `survivorship-biased: current holdings used` at the top of the file. |

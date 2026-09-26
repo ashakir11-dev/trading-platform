@@ -99,7 +99,7 @@ prompts/
   run-agent.md                   /run-agent <agent> <subject> [--as-of DATE]
                                  (isolation; a past date runs in backtest mode)
   decide.md                      /decide <candidate_id> accept|reject [note]
-  trade.md                       /trade <position_id> entered|exited <price> [date]
+  trade.md                       /trade <position_id> entered|exited <price> [date] [fraction]
   follow-up.md                   /follow-up                      (cron)
   evaluate.md                    /evaluate [<agent>] [--since DATE]
   feedback.md                    /feedback <agent>
@@ -136,7 +136,7 @@ workspace/
     feedback/<proposal_id>.md             feedback proposals, status: pending|approved|rejected
   positions/<position_id>/
     position.md                           the plan being watched (from the technical analysis)
-    alerts.md                             tripwire log, 12h cooldown state
+    alerts.md                             tripwire log (price, clock and news alerts)
     reviews/<date>.md                     Agent 5 re-reviews
   decisions/                              YOUR records; only the middleware agent reads this
     <candidate_id>.md
@@ -205,7 +205,7 @@ What you'd do differently (optional).
 | market-scanner | Did the sectors it called up/down move that way relative to SPY over the horizon? |
 | sector-deep-dive | Did higher `potential_score` companies do better, **including the ones not forwarded**? |
 | company-deep-dive | Did the catalysts it checked materialise? Were risks that later hit listed? |
-| technical-analysis | Stop or target first (per `level_trigger`), reward:risk realised, entries never filled. |
+| technical-analysis | The plan walked forward as written (per `level_trigger`): entry filled or expired, targets and trailing stop, checkpoints, time exit at the max hold; realised R, MFE/MAE; by setup and trade type. |
 | follow-up | Were alerts material and timely? Did exit/adjust calls help? |
 
 Because prices of rejected and not-forwarded candidates are graded too, the evaluation
@@ -465,7 +465,7 @@ Interactive: start `claude` in the repository and use the commands:
 | `/run [--max-sectors N] [--shortlist N]` | Live run, all four stages, report |
 | `/run-agent <agent> <subject> [--as-of DATE]` | One agent on its own (a past date runs it as a backtest) |
 | `/decide <candidate_id> accept\|reject [note]` | Record your decision; accept opens a watched position |
-| `/trade <position_id> entered\|exited <price> [date]` | Record your actual entry or exit |
+| `/trade <position_id> entered\|exited <price> [date] [fraction]` | Record your actual entry or exit, in full or in part |
 | `/follow-up [position_id]` | Agent 5 tick over open positions (cron) |
 | `/evaluate [--run ID] [--agent A] [--min-days N]` | Grade past runs; your decision reviews in chat |
 | `/feedback <agent>` | Propose lessons from an agent's evaluations |

@@ -80,7 +80,7 @@ Detail: `05` 2.4 and 14; clocks: `08` 4.
 
 ## 6. Proposed pipeline changes (for the user to decide)
 
-None of these is in force. Each is what the playbook recommends and the current `role.md`, output format or tooling does not yet support.
+**Adopted on 2026-09-26: items 2-6** (trade types, the plan fields, the rule changes, the follow-up and evaluator changes), in simplified form: see `role.md` and `docs/ARCHITECTURE.md` section 5. Where role.md differs from this playbook, role.md wins. **Still open:** items 1, 7 and 8.
 
 1. **Tell the agent to use the playbook.** `role.md` (and the backtest variant) does not mention it today. Proposal: "read `playbook/cheat-sheet.md` every run; open topic files as needed".
 2. **Output fields** (`08` 12.1 template): `trade_type`; `setup` (S1-S15 label); a `targets` list (T1, T2 with fractions) and `scale_out`; `entry_plan` with `valid_until` (entry expiry), trigger type, `stale_cap`, tranches and `cancel_if`; `time_stop` and `checkpoints` (CP1, CP2, T1 deadline); `max_hold` in bars plus a latest date; `trailing_rule`; `event_plan` (each report and its action); `worst_case` gap line; `expected_days_to_t1`; `regime_at_entry`. `target` would stay T1, the value `reward_to_risk` checks.
