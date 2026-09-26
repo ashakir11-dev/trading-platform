@@ -105,10 +105,8 @@ Body:
 <trend on the context chart, structure on the primary chart, the levels and why>
 
 ## Plan
-<entry, stop, target, horizon, invalidation, in words, with the chart evidence>
-
-## Rules check
-| Rule | Outcome | Numbers |
+<why these levels: the chart evidence for entry, stop and target, one line each. The
+numbers and rule results are in the frontmatter; don't repeat them.>
 
 ## Factors
 ## Risks considered

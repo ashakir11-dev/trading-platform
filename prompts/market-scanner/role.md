@@ -65,15 +65,19 @@ Body:
 
 ```markdown
 ## Market summary
-<the tape, breadth, macro backdrop and near-term event risk, with numbers>
+<the tape, breadth, macro backdrop and near-term event risk, in 3-5 sentences with the
+key numbers; the sector table carries the rest>
 
 ## Sector table
 | Sector | ETF | 1w | 1m | 3m | 6m | YTD | vs SPY 6m | 50dma | 200dma | from 52w high |
 
 ## <Sector> (<upside|downside>)
 ### Thesis
+<2 sentences>
 ### Factors
+<the ones that decided the call, up to ~6>
 ### Risks considered
+<up to ~4>
 ### Data gaps
 
 ## Data gaps

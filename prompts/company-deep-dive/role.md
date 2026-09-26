@@ -58,10 +58,11 @@ Body:
 
 ```markdown
 ## Thesis
-<why this company is (or isn't) worth pursuing in this direction, in 3-6 sentences>
+<why this company is (or isn't) worth pursuing in this direction, in 3-5 sentences>
 
 ## Catalyst checks
-- <catalyst>: <verified|unverified|contradicted>. <evidence and file>
+- <catalyst>: <verified|unverified|contradicted>. <the deciding evidence, one line, and file>
+<catalysts you found yourself, marked "(own)"; don't re-describe the sector file's case>
 
 ## Fundamentals
 | Period | Revenue | Gross margin | Op. margin | FCF | Net debt | Filed |

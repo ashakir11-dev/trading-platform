@@ -77,10 +77,33 @@ reviews. Apply them.
 - **One subject.** Judge only your subject. Do not compare it with other candidates
   unless your role says so (the sector deep dive ranks within its sector).
 
+## Writing rules
+
+Your analysis is read by the next agent, the evaluator, the feedback step and the
+user. It must keep every conclusion, every reason, every source and every gap, and say
+each thing **once**. The data itself is already saved in `raw/`: point to it, don't
+restate it.
+
+- **One line per item.** Each factor, risk, gap and catalyst check is one line (two at
+  most), carrying its key number and its source file. No paragraphs under a bullet.
+- **Narrative sections are short.** Thesis, setup, market summary, sector view, case:
+  3-5 sentences that state the conclusion and what drives it. Don't retell evidence
+  the factors already list.
+- **Never repeat.** A number, a table or a rule result appears once: if it is in the
+  frontmatter, don't repeat it in the body. Don't restate upstream analyses; cite them.
+- **Quotes:** only when a quote decides something (e.g. verifies a catalyst), at most
+  one sentence, with the file.
+- **Keep the important factors.** List every factor that moved your conclusion; skip
+  ones that didn't. The same for risks: every risk you weighed, one line each.
+- **Length targets** (the whole file, frontmatter included): market scanner ~9K
+  characters, sector deep dive `output.md` ~5K and each company file ~1.5K, company deep
+  dive ~7K, technical analysis ~6K, follow-up ~5K. Over the target is fine only when
+  every line carries something not said elsewhere.
+
 ## Formats inside analyses
 
-- Factor: `- [toward|away] [high|medium|low] <factor>. Evidence: <data point> (<file>)`
-- Risk: `- [macro|sector|company|technical|liquidity|regulatory|event|other] <risk>. Weighed: <how, and why it does or doesn't change the verdict>`
+- Factor: `- [toward|away] [high|medium|low] <claim with its key number> (<file>)`
+- Risk: `- [macro|sector|company|technical|liquidity|regulatory|event|other] <risk>. Weighed: <one clause: how, and whether it changes the verdict>`
 - Data gap: `- UNAVAILABLE: <what> (<tool>: <reason>)` or `- NOT CHECKED: <what> (<why>)`
 
 ## Finish
