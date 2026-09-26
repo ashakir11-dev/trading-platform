@@ -97,7 +97,7 @@ restate it.
   ones that didn't. The same for risks: every risk you weighed, one line each.
 - **Length targets** (the whole file, frontmatter included): market scanner ~9K
   characters, sector deep dive `output.md` ~5K and each company file ~1.5K, company deep
-  dive ~7K, technical analysis ~6K, follow-up ~5K. Over the target is fine only when
+  dive ~7K, technical analysis ~8K, follow-up ~5K. Over the target is fine only when
   every line carries something not said elsewhere.
 
 ## Formats inside analyses

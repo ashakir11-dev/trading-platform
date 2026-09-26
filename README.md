@@ -70,7 +70,8 @@ decisions) and [`docs/prompt-subagents-design.md`](docs/prompt-subagents-design.
 ## Investor profile
 
 The pipeline works for a specific investor. The profile sets risk tolerance, allowed
-horizons, whether shorts are allowed, maximum loss per trade, minimum reward:risk, target
+horizons and trade types (`short_swing`, `swing`, `long_swing`, `investment`; optional),
+whether shorts are allowed, maximum loss per trade, minimum reward:risk, target
 return, whether a stop/target counts as hit on the close or intraday (`level_trigger`),
 and free-text preferences. The technical agent plans around it and applies its rules;
 the middleware re-checks the numbers.
@@ -83,6 +84,7 @@ it; without one, the example is used.
   "name": "example",
   "risk_tolerance": "moderate",
   "horizons": ["swing", "long_term"],
+  "trade_types": ["short_swing", "swing", "long_swing", "investment"],
   "allow_short": false,
   "max_loss_per_trade_pct": 8.0,
   "min_reward_to_risk": 2.0,

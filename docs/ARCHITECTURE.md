@@ -97,8 +97,8 @@ front, not a decision, so showing it to agents does not break the one-way middle
 principle. The technical agent and Agent 5's full review read it, and the rules
 enforce it.
 
-**Trade types, horizons and chart timeframes.** The profile allows *horizons*; the
-technical agent picks one of four *trade types* within them. Each has its own charts and
+**Trade types, horizons and chart timeframes.** The profile allows *horizons* and,
+optionally, *trade types*; the technical agent picks one of four trade types within them. Each has its own charts and
 clocks; the agent reads levels from the primary chart and trend from the context chart.
 Sessions are NYSE trading days (1 week = 5 sessions).
 
@@ -131,7 +131,7 @@ a judgment failure. `reject` removes the candidate; `flag` warns the user in the
 | Rule | Outcome | When |
 |---|---|---|
 | `plan_price_order` | reject | long needs stop < entry < T1 < T2 < T3 (tranches above the stop); short the reverse |
-| `profile_horizon` | reject | the trade type's horizon not in the profile's horizons |
+| `profile_horizon` | reject | the trade type's horizon not in the profile's horizons, or the trade type not in the profile's optional `trade_types` |
 | `chart_timeframe` | flag | plan levels not read from the trade type's primary chart |
 | `profile_short` | reject | short plan when shorts are not allowed; downside sector calls are then not pursued |
 | `max_loss` | reject | stop further from entry than `max_loss_per_trade_pct`, in any tranche fill state |

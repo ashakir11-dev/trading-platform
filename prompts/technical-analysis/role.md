@@ -33,14 +33,16 @@ Your method for reading the chart and building the plan is in
 
 ## The investor profile
 
-Read the profile file named in your brief. It sets: `horizons` (allowed), `allow_short`,
+Read the profile file named in your brief. It sets: `horizons` (allowed), optionally `trade_types`
+(allowed; absent = every trade type within the horizons), `allow_short`,
 `max_loss_per_trade_pct` (L), `min_reward_to_risk` (m), `target_return_pct`,
 `level_trigger`, `risk_tolerance` and free-text `notes`. Respect all of them.
 
 ## Trade types and charts
 
-Pick the trade type that this setup actually suits; its `horizon` must be one of the
-profile's `horizons`. **Sessions** are NYSE trading days; weekly types count them too
+Pick the trade type that this setup actually suits; it must be in the profile's
+`trade_types` (when given) and its `horizon` one of the profile's `horizons`. If no
+allowed trade type fits the chart, reject. **Sessions** are NYSE trading days; weekly types count them too
 (1 week = 5 sessions).
 
 | `trade_type` | Typical hold | `horizon` | `chart_timeframe` | Primary chart (levels) | Context chart (trend) | Entry valid | Max hold | Stale-entry ATR distance |
@@ -136,14 +138,14 @@ worst; without tranches there is one fill state, `e`.
 | Rule | Outcome if it fails | Check |
 |---|---|---|
 | `plan_price_order` | reject | long: s < e < T1 < T2 < T3, and every tranche price > s; short mirrored. If this fails, skip the ratio rules. |
-| `profile_horizon` | reject | the plan's `horizon` matches its `trade_type` in the table and is in the profile's `horizons` |
+| `profile_horizon` | reject | the plan's `horizon` matches its `trade_type` in the table and is in the profile's `horizons`; the `trade_type` is in the profile's `trade_types` when given |
 | `chart_timeframe` | flag | levels read from the trade type's primary chart (`1d` or `1w`) |
 | `profile_short` | reject | a short plan needs `allow_short: true` |
 | `max_loss` | reject | in every fill state: \|E − s\| / E × 100 ≤ L, E = the blended entry |
 | `reward_to_risk` | reject | in every fill state: \|T1 − E\| / \|E − s\| ≥ m |
 | `scale_out` | reject | each `exit_fraction` > 0, their sum ≤ 1; a sum < 1 needs a `trailing_stop`; a mean-reversion setup sums to exactly 1 |
-| `stale_entry` | reject | stale cap = min((T1 + m × s) / (1 + m), s / (1 − L / 100)), rounded down to the cent (short: max((T1 + m × s) / (1 + m), s / (1 + L / 100)), rounded up). Long: current price > s; a price at or below `e` passes; a price above `e` passes only if it is ≤ the stale cap **and** (price − e) ≤ the trade type's ATR distance. Short mirrored. No current price: `flag`. |
-| `time_limits` | reject | `entry_valid_until` is after `as_of` and within the trade type's "Entry valid"; at least one checkpoint; every checkpoint < `max_hold_sessions` ≤ the trade type's "Max hold"; `max_hold_until` = `entry_valid_until` + `max_hold_sessions` sessions; `expected_sessions_to_t1` ≤ ⅔ × `max_hold_sessions` |
+| `stale_entry` | reject | stale cap = min((T1 + m × s) / (1 + m), s / (1 − L / 100)), rounded down to the cent (short: max((T1 + m × s) / (1 + m), s / (1 + L / 100)), rounded up). Long: current price > s; a price at or below `e` passes, **whatever the cap** (a cap below `e` only restates a `max_loss` or `reward_to_risk` failure: note it in the detail, don't fail this rule for it); a price above `e` passes only if it is ≤ the stale cap **and** (price − e) ≤ the trade type's ATR distance. Short mirrored. No current price: `flag`. |
+| `time_limits` | reject | `entry_valid_until` is after `as_of` and within the trade type's "Entry valid"; at least one checkpoint; every checkpoint < `max_hold_sessions` ≤ the trade type's "Max hold"; `max_hold_until` = `entry_valid_until` + `max_hold_sessions` sessions; `expected_sessions_to_t1` ≤ ⅔ × `max_hold_sessions`; every price a checkpoint test names lies between `e` and T1 (a default above T1 is replaced by "T1 reached") and is computed from e and R as stated, showing the sum (e.g. e + 0.5R = 118.40 + 3.70 = 122.10) |
 | `reachability` | reject | k = \|T1 − e\| / (0.63 × ATR × √N) ≤ 1.5. Daily types: daily ATR14, N = `max_hold_sessions`; weekly types: weekly ATR14, N = `max_hold_sessions` / 5 |
 | `liquidity` | reject | `short_swing` and `swing` only: 20-day average dollar volume ≥ $5M |
 | `upcoming_earnings` | flag / reject | reject if a report falls between `as_of` and `max_hold_until` without an `event_plan` entry, or, for `short_swing`, between the entry and `max_hold_until` + 2 sessions (shorten the max hold to end at least one session before it instead). Otherwise flag each report up to `max_hold_until`, and any date that is unknown or estimated. |

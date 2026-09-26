@@ -80,7 +80,7 @@ Detail: `05` 2.4 and 14; clocks: `08` 4.
 
 ## 6. Proposed pipeline changes (for the user to decide)
 
-**Adopted on 2026-09-26: items 1-6** (trade types, the plan fields, the rule changes, the follow-up and evaluator changes), in simplified form: see `role.md` and `docs/ARCHITECTURE.md` section 5. Where role.md differs from this playbook, role.md wins. **Still open:** items 7 and 8.
+**Adopted on 2026-09-26: items 1-6 and 8** (trade types, the plan fields, the rule changes, the follow-up and evaluator changes), in simplified form: see `role.md` and `docs/ARCHITECTURE.md` section 5. Where role.md differs from this playbook, role.md wins. **Still open:** item 7.
 
 1. **Tell the agent to use the playbook.** Adopted: `role.md` (shared by the backtest variant) has the agent read `playbook/cheat-sheet.md` every run and open topic files as needed; the evaluator grades reasoning against the cheat sheet.
 2. **Output fields** (`08` 12.1 template): `trade_type`; `setup` (S1-S15 label); a `targets` list (T1, T2 with fractions) and `scale_out`; `entry_plan` with `valid_until` (entry expiry), trigger type, `stale_cap`, tranches and `cancel_if`; `time_stop` and `checkpoints` (CP1, CP2, T1 deadline); `max_hold` in bars plus a latest date; `trailing_rule`; `event_plan` (each report and its action); `worst_case` gap line; `expected_days_to_t1`; `regime_at_entry`. `target` would stay T1, the value `reward_to_risk` checks.
@@ -92,7 +92,7 @@ Detail: `05` 2.4 and 14; clocks: `08` 4.
 5. **Follow-up agent** (`08` 11.3): an alert kind `time` for `valid_until`, checkpoints, T1 deadline, max hold and pre-report decision dates; stop, target and max-hold alerts that bypass the 12-hour cooldown; full re-review every 3 / 5 / 10 / 20 sessions by trade_type; position files that carry `trade_type`, `valid_until`, `max_hold_date`, checkpoints, tranches and scale-out.
 6. **Evaluator**: close a filled plan at its `max_hold_date` close as a time exit with realised R (today it stays open); grade by setup and trade_type; record MFE, MAE, give-back and actual vs expected bars to T1 (`07` 14, `08` 15).
 7. **Data access** (read-only Equibles tools only, per the repository hard rules; in backtests through the gatekeeper's audited data packs): a market holiday calendar for session counting (`08` 3.2), dividend history for ex-dividend dates (`08` 7.3), and VIX, put/call, short interest or option-implied moves as optional context (`09` 2.2). Backtest data packs would need SPY, QQQ, the sector ETFs and up to five years of bars for weekly trade types (`05` 2.2).
-8. **Length target**: the ~6K technical-analysis output target (`prompts/shared.md`) may need raising for plans that carry a full timeline and event plan.
+8. **Length target**: adopted, raised from ~6K to ~8K in `prompts/shared.md`.
 
 ## 7. Maintaining the playbook
 

@@ -99,6 +99,8 @@ listing it, recompute the arithmetic rules from the plan's numbers and the profi
 (definitions in `prompts/technical-analysis/role.md`; L = `max_loss_per_trade_pct`,
 m = `min_reward_to_risk`; with `entry_tranches`, every fill state):
 
+- profile: the `trade_type` in the profile's `trade_types` (when given), its horizon in
+  `horizons`;
 - price order: long s < e < T1 < T2 < T3, short mirrored;
 - max loss: |E − s| / E × 100 ≤ L;
 - reward:risk: |T1 − E| / |E − s| ≥ m;
@@ -107,7 +109,8 @@ m = `min_reward_to_risk`; with `entry_tranches`, every fill state):
   and the ATR distance;
 - time limits: `entry_valid_until` after `as_of` and within the trade type's validity;
   checkpoints < `max_hold_sessions` ≤ the trade type's max hold;
-  `expected_sessions_to_t1` ≤ ⅔ × `max_hold_sessions`;
+  `expected_sessions_to_t1` ≤ ⅔ × `max_hold_sessions`; checkpoint prices (e + 0.5R,
+  e + 1R, …) computed right and between e and T1;
 - reachability: |T1 − e| / (0.63 × ATR × √N) ≤ 1.5, with the plan's `atr`;
 - liquidity (`short_swing`, `swing`): `dollar_volume_20d` ≥ $5M.
 
