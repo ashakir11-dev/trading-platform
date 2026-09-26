@@ -75,8 +75,9 @@ whether shorts are allowed, maximum loss per trade, minimum reward:risk, whether
 and free-text preferences. The technical agent plans around it and applies its rules;
 the middleware re-checks the numbers.
 
-Copy [`profile.example.json`](profile.example.json) to `workspace/profile.json` and edit
-it; without one, the example is used.
+Copy [`profile.example.json`](profile.example.json) (or a saved profile from
+[`profiles/`](profiles/), e.g. `profiles/short-swing.json`) to `workspace/profile.json`
+and edit it; without one, the example is used.
 
 ```json
 {
