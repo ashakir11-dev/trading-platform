@@ -133,3 +133,11 @@ def test_hook_leaves_other_tools_and_bad_tables_alone(project):
     assert guard.post(_event(project, "mcp__equibles__GetStockPrices", {"ticker": "X"},
                              response=[{"type": "text", "text": "No data."}])) is None
     assert len(list((project / FOLDER / "raw").iterdir())) == 2
+
+
+@pytest.mark.parametrize("agent_type", ["follow-up", "stage-evaluator"])
+def test_agents_that_need_bars_get_them_unchanged(project, agent_type):
+    guard.post(_event(project, "Write", {"file_path": f"{FOLDER}/claim.md"}, agent_type))
+    response = [{"type": "text", "text": table(list(range(1, 61)))}]
+    assert guard.post(_event(project, "mcp__equibles__GetStockPrices", {"ticker": "T"}, agent_type, response)) is None
+    assert (project / FOLDER / "raw" / "001-GetStockPrices.json").exists()

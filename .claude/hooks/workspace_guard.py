@@ -16,8 +16,9 @@ even when a prompt is ignored. They contain no pipeline logic.
     claims that folder for the subagent;
   * every Equibles response a subagent receives is saved verbatim to its claimed
     folder's ``raw/``, so raw data travels with the analysis without the agent copying it;
-  * a ``GetStockPrices`` response is replaced, for the agent, by statistics computed from
-    it (``price_stats.py``); the full rows stay in ``raw/``.
+  * for the market scanner, sector deep dive and technical analysis, a ``GetStockPrices``
+    response is replaced by statistics computed from it (``price_stats.py``); the full
+    rows stay in ``raw/``.
 
 Hook input (JSON on stdin) carries ``agent_id``/``agent_type`` only inside a subagent.
 """
@@ -41,6 +42,9 @@ WRITE_TOOLS = frozenset({
     "ClosePortfolioLot", "RemovePortfolioLot", "WatchInstrument", "UnwatchInstrument",
     "ReportProblem", "SuggestToolImprovement",
 })
+# Agents that get price statistics instead of daily rows. The others (follow-up,
+# evaluators) need individual bars to tell when a stop or target was hit.
+STATS_AGENTS = frozenset({"market-scanner", "sector-deep-dive", "technical-analysis"})
 FILE_TOOLS = frozenset({"Read", "Write", "Edit", "MultiEdit", "NotebookEdit"})
 SEARCH_TOOLS = frozenset({"Glob", "Grep", "LS"})
 
@@ -76,7 +80,9 @@ def claimed_folder(event: dict[str, Any], agent_id: str) -> Path | None:
 
 
 def analysis_folder_of(path: Path, event: dict[str, Any]) -> Path | None:
-    """``workspace/agents/<agent>/analyses/<run>/<subject>`` containing ``path``, if any."""
+    """The claimable folder containing ``path``, if any:
+    ``workspace/agents/<agent>/analyses/<run>/<subject>`` or
+    ``workspace/agents/<agent>/evaluations/<eval_id>``."""
     try:
         rel = path.relative_to(workspace(event))
     except ValueError:
@@ -84,6 +90,8 @@ def analysis_folder_of(path: Path, event: dict[str, Any]) -> Path | None:
     parts = rel.parts
     if len(parts) >= 6 and parts[0] == "agents" and parts[2] == "analyses":
         return workspace(event).joinpath(*parts[:5])
+    if len(parts) >= 5 and parts[0] == "agents" and parts[2] == "evaluations":
+        return workspace(event).joinpath(*parts[:4])
     return None
 
 
@@ -181,7 +189,7 @@ def post(event: dict[str, Any]) -> dict[str, Any] | None:
                 break
             except FileExistsError:
                 seq += 1
-        if name == "GetStockPrices":
+        if name == "GetStockPrices" and (event.get("agent_type") or "") in STATS_AGENTS:
             return _price_stats_output(event, path)
     return None
 

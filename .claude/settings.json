@@ -45,7 +45,11 @@
       "mcp__equibles__GetAverageTrueRange",
       "mcp__equibles__GetBollingerBands",
       "mcp__equibles__GetStochasticOscillator",
-      "mcp__equibles__GetOnBalanceVolume"
+      "mcp__equibles__GetOnBalanceVolume",
+      "Bash(git add prompts/:*)",
+      "Bash(git commit -m:*)",
+      "Bash(git show:*)",
+      "Bash(git log:*)"
     ],
     "deny": [
       "mcp__equibles__CreateMyPortfolio",

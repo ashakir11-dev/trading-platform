@@ -15,9 +15,13 @@ workspace/
     raw/NNN-<Tool>.json                     every Equibles response, saved by a hook
     output.md                               the agent's analysis
     companies/<TICKER>.md                   sector-deep-dive only: one file per company
+  agents/<agent>/evaluations/<run_id>--<YYYYMMDD>/
+    claim.md, raw/, output.md               one evaluation of the agent's work in a run
+  agents/<agent>/feedback/<proposal_id>.md  proposed lessons (pending | approved | rejected)
   positions/<position_id>/position.md       accepted trades being watched
   positions/<position_id>/alerts.md         follow-up alert log
   decisions/<candidate_id>.md               the user's decisions: middleware agent only
+  decisions/reviews/<candidate_id>--<YYYYMMDD>.md   your decision vs the outcome (D0)
   .state/                                   hook bookkeeping; don't touch
 ```
 

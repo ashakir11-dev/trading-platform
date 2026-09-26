@@ -112,3 +112,10 @@ def test_main_prints_deny_json(project, monkeypatch, capsys):
     assert guard.main(["guard", "pre"]) == 0
     out = json.loads(capsys.readouterr().out)
     assert out["hookSpecificOutput"]["permissionDecision"] == "deny"
+
+
+def test_evaluation_folders_can_be_claimed(project):
+    guard.post(event(project, "Write", {"file_path": "workspace/agents/technical-analysis/evaluations/r1--20261026/claim.md"},
+                     agent_type="stage-evaluator"))
+    assert guard.claimed_folder(event(project, "Read"), "a1") == \
+        project / "workspace/agents/technical-analysis/evaluations/r1--20261026"

@@ -316,7 +316,7 @@ from reasoning review.
    `/approve`.
 6. Backtest mode: gatekeeper, pit-auditor, `-backtest` agent variants, `/backtest`.
 
-**Built so far:** steps 1-3 (see §11).
+**Built so far:** steps 1-5 (see §11).
 
 ## 10. Backtest mode (D1)
 
