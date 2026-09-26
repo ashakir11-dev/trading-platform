@@ -110,5 +110,6 @@ agent's reason.
 ## Finishing
 
 Write `workspace/runs/<run_id>/report.md` as described in `prompts/middleware/report.md`,
+then `report.json` and render `report.html` from it (same file, "The showcase page"),
 set `status: complete` in `run.md` (or `failed` if the market scanner failed), and show
-the report to the user.
+the report to the user with the path of `report.html`.

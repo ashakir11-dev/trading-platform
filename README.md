@@ -102,7 +102,9 @@ it; without one, the example is used.
    agents run on the session's own model access.
 2. Type `/run --max-sectors 1 --shortlist 3` (a small run, about 15 minutes), or `/run`
    for every sector the scanner calls.
-3. The report appears in the chat and in `workspace/runs/<run_id>/report.md`.
+3. The report appears in the chat and in `workspace/runs/<run_id>/report.md`; open
+   `workspace/runs/<run_id>/report.html` in a browser for the recommendations as cards,
+   each with its price ladder, risk and reward, catalysts and flags.
 4. Record a decision with `/decide <candidate_id> accept "note"` (or `reject`).
 
 To use your own profile, ask the session to write it to `workspace/profile.json`
@@ -181,8 +183,9 @@ prompts/                  what every agent does
                             price statistics, backtest data filter
   settings.json             permissions and hook wiring
 .mcp.json                 the Equibles MCP server
+scripts/render_report.py  renders report.html from the middleware's report.json
 workspace/                run data (git-ignored)
-tests/                    tests for the hooks
+tests/                    tests for the hooks and the report renderer
 docs/                     architecture, subagent design, operations, research
 profile.example.json      example investor profile
 ```

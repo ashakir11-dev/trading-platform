@@ -18,4 +18,4 @@ Run the pipeline end to end, live, as of now. Options: $ARGUMENTS
 6. Launch one `company-deep-dive` per forwarded candidate, in parallel.
 7. Launch one `technical-analysis` per candidate that passed, in parallel.
 8. Run the recommendation check.
-9. Write the report and show it.
+9. Write the report, render the showcase page (`report.html`) and show the report.

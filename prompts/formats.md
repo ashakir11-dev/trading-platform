@@ -10,6 +10,7 @@ workspace/
     run.md                                  run manifest (middleware agent)
     profile.json                            the profile used by this run
     report.md                               the report shown to the user
+    report.json, report.html                the showcase page and the data it is rendered from
     lessons/<agent>.md                      backtests: each agent's lessons as of as_of
     packs/<stage>/<subject>/                backtests: audited data pack (claim, data/, gaps, manifest, audit)
     .gatekeeper/<stage>/<subject>/raw/      backtests: the gatekeeper's unfiltered responses (hook-protected)

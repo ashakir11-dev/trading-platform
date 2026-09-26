@@ -80,7 +80,8 @@ prompts/
     lessons.md                   approved improvements; role.md always includes it
   middleware/
     role.md                      orchestration rules, the decisions firewall (§7)
-    report.md                    how the report to you is written
+    report.md                    how the report to you is written, and the
+                                 report.json behind the report.html page
     backtest.md                  backtest relay loop (§10)
   gatekeeper/role.md             backtest only: fetch + point-in-time filter (§10)
   pit-auditor/role.md            backtest only: independent check of each data pack (§10)
@@ -484,5 +485,6 @@ The environment variable keeps a headless run from killing agents that were star
 in the background after 10 minutes; the middleware prompt also launches every agent in
 the foreground.
 
-Everything a run produces is under `workspace/`: `runs/<run_id>/report.md` first,
+Everything a run produces is under `workspace/`: `runs/<run_id>/report.md` first
+(and `report.html`, the same run as a page, rendered by `scripts/render_report.py`),
 then each agent's `analyses/<run_id>/` folder.

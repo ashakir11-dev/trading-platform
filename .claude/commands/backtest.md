@@ -11,5 +11,5 @@ Run the pipeline end to end as a backtest. Options: $ARGUMENTS
 
 Same stages and forwarding rules as `/run` (market-scanner → sector-deep-dive per
 pursued sector → company-deep-dive per candidate → technical-analysis per passing
-candidate → recommendation check), but every stage agent is its `-backtest` variant and
+candidate → recommendation check → report and `report.html`), but every stage agent is its `-backtest` variant and
 gets an audited data pack built first, as `prompts/middleware/backtest.md` describes.
