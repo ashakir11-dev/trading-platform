@@ -1,0 +1,22 @@
+{
+  "name": "trading-platform",
+  "image": "mcr.microsoft.com/devcontainers/python:3.12",
+  "postCreateCommand": "scripts/bootstrap.sh",
+  "remoteEnv": {
+    "PATH": "${containerWorkspaceFolder}/.venv/bin:${containerEnv:PATH}"
+  },
+  "secrets": {
+    "EQUIBLES_API_KEY": {
+      "description": "Equibles API key (Plus plan or better) for market data.",
+      "documentationUrl": "https://equibles.com"
+    },
+    "ANTHROPIC_API_KEY": {
+      "description": "Anthropic API key for the agents. Leave empty to log in to Claude Code instead."
+    }
+  },
+  "customizations": {
+    "codespaces": {
+      "openFiles": ["README.md"]
+    }
+  }
+}

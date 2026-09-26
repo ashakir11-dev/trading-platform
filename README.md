@@ -10,6 +10,26 @@ orders.**
 > feedback and backtests are built; see [Status](#status). Nothing here is financial
 > advice.
 
+[![fresh clone](https://github.com/ashakir11-dev/trading-platform/actions/workflows/ci.yml/badge.svg)](https://github.com/ashakir11-dev/trading-platform/actions/workflows/ci.yml)
+[![Open in GitHub Codespaces](https://github.com/codespaces/badge.svg)](https://codespaces.new/ashakir11-dev/trading-platform)
+
+## Quickstart
+
+It is a clonable agent: everything it needs is in this repository. With Python 3.10+
+on macOS, Linux or WSL:
+
+```bash
+git clone https://github.com/ashakir11-dev/trading-platform.git
+cd trading-platform
+scripts/bootstrap.sh              # installs the `trading-agent` launcher (Claude Code included)
+$EDITOR .env                      # EQUIBLES_API_KEY; ANTHROPIC_API_KEY unless logged in to Claude Code
+.venv/bin/trading-agent           # talk to the agent: /setup, then /run --max-sectors 1 --shortlist 3
+```
+
+Or open it in a Codespace (badge above): add `EQUIBLES_API_KEY` (and optionally
+`ANTHROPIC_API_KEY`) as Codespaces secrets, and it sets itself up; run
+`trading-agent`. Details, headless runs and Claude Code on the web: [Run it now](#run-it-now).
+
 ## How it works
 
 ```

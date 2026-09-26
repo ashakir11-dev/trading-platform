@@ -1,0 +1,35 @@
+# A fresh clone must set itself up and pass its checks on any supported machine:
+# bootstrap (venv, launcher with the bundled Claude Code, workspace, profile, .env),
+# the tests, and the machine check. No keys or network calls to Equibles or Claude.
+name: fresh clone
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  clone:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        python: ["3.10", "3.13"]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Bootstrap
+        run: scripts/bootstrap.sh
+      - name: Tests
+        run: .venv/bin/pytest -q
+      - name: Machine check
+        # A placeholder key: every check but the live ones must pass.
+        env:
+          EQUIBLES_API_KEY: placeholder
+        run: .venv/bin/trading-agent doctor
+      - name: Launcher
+        run: |
+          .venv/bin/trading-agent --help
+          python3 -m trading_agent doctor | grep -q "ok    repository"
