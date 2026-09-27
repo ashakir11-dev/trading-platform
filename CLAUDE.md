@@ -24,5 +24,8 @@ raw-data capture, and turns price responses into statistics (`price_stats.py`, a
 `tests/test_workspace_guard.py` and `tests/test_price_stats.py` passing when changing them.
 `scripts/render_report.py` lays out the middleware's `report.json` as `report.html` (layout and plan distances
 only, no network); keep `tests/test_render_report.py` passing.
+`scripts/build_index.py` indexes `workspace/` into a disposable `workspace/index.sqlite3`, and
+`scripts/render_dashboard.py` lays it out as `dashboard.html` (candidates, decisions, positions across
+runs, for comparison) — see `docs/operations.md` §8; keep `tests/test_build_index.py` passing.
 
 Dev: `pip install pytest && pytest` (tests cover the hooks). Running the pipeline: `docs/operations.md`.

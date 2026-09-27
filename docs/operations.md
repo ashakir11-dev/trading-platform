@@ -149,3 +149,22 @@ Everything is in `workspace/` at the repository root (git-ignored). Formats:
 
 Back it up by copying the folder while nothing is running. Approved lessons live in
 `prompts/` (git), not in `workspace/`.
+
+## 8. Tracking dashboard
+
+Every candidate, decision and position already lives in the files above; the dashboard
+just makes them comparable at a glance instead of opening files one at a time.
+
+```
+python3 scripts/build_index.py && python3 scripts/render_dashboard.py
+```
+
+The first command walks `workspace/` and loads it into `workspace/index.sqlite3`
+(git-ignored, rebuilt from scratch each time — the markdown/YAML files stay the source
+of truth, this is a disposable index). The second reads that database and writes
+`workspace/dashboard.html`: one row per candidate (company deep dive verdict and
+confidence, technical plan and confidence, your decision, the position it opened and
+its current status), a positions table with alert counts, and summary tiles
+(candidates, accepted, rejected, open positions). Rebuild after a run, `/decide` or
+`/trade` to refresh it. It reads the same files the decisions firewall protects, but it
+is a script you run yourself, not an agent, so that rule is unaffected.
