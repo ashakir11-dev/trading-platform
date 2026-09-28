@@ -6,9 +6,11 @@ lessons live in `prompts/` (versioned).
 ```
 workspace/
   profile.json                              investor profile (optional; else profile.example.json)
+  congress/member_rankings.md               Congress member scorecard (optional; congress-analyst-rankings)
   runs/<run_id>/
     run.md                                  run manifest (middleware agent)
     profile.json                            the profile used by this run
+    congress_rankings.md                    the scorecard used by this run (copy of congress/member_rankings.md)
     report.md                               the report shown to the user
     report.json, report.html                the showcase page and the data it is rendered from
     lessons/<agent>.md                      backtests: each agent's lessons as of as_of

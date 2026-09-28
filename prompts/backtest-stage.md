@@ -24,5 +24,9 @@ the conclusion you would have reached then, knowing only what was public then.
   another run's analyses.
 - **Stale entry (technical analysis):** the current price is the last close in your
   pack at `as_of`; say so.
+- **Scorecard (congress-analyst):** there is no `workspace/runs/<run_id>/congress_rankings.md`
+  in a backtest. Read `data/congress-scorecard.md` in your pack instead — the
+  gatekeeper built it point-in-time, the same file shape, and set `scorecard_as_of`
+  from its `as_of`.
 
 Set `mode: backtest` in your claim and your output.

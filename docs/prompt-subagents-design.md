@@ -85,6 +85,8 @@ prompts/
     backtest.md                  backtest relay loop (§10)
   gatekeeper/role.md             backtest only: fetch + point-in-time filter (§10)
   pit-auditor/role.md            backtest only: independent check of each data pack (§10)
+  congress-analyst/
+    rankings.md                  periodic, market-wide: builds the member scorecard (§10.1)
 
 .claude/agents/                  subagent definitions (frontmatter: name, description,
   <agent>.md                       tools, model); default + isolation modes
@@ -102,6 +104,7 @@ prompts/
   decide.md                      /decide <candidate_id> accept|reject [note]
   trade.md                       /trade <position_id> entered|exited <price> [date]
   follow-up.md                   /follow-up                      (cron)
+  congress-rankings.md            /congress-rankings               (cron; rebuilds the scorecard)
   evaluate.md                    /evaluate [<agent>] [--since DATE]
   feedback.md                    /feedback <agent>
   approve.md                     /approve <agent> <proposal_id>
@@ -125,9 +128,11 @@ the agents follow are in [`prompts/formats.md`](../prompts/formats.md).
 
 ```
 workspace/
+  congress/member_rankings.md             the member scorecard (congress-analyst-rankings; §10.1)
   runs/<run_id>/run.md                    manifest: as_of, mode (live | backtest), agents
                                           run, prompt commit, links to each analysis,
                                           point_in_time (backtests, §10)
+  runs/<run_id>/congress_rankings.md      the scorecard as copied into this run
   runs/<run_id>/packs/<stage>/<subject>/  backtests only: gatekeeper data pack + audit (§10)
   agents/<agent>/
     analyses/<run_id>/<subject>/          subject = "market", a sector or a ticker
@@ -229,6 +234,8 @@ listed in the mode table above.
 | sector-deep-dive | `GetEtfHoldings`, `GetStockPrices`, `ScreenStocks`, `GetValuationMultiples`, `ListFilings`, `GetFdaAdvisoryCommitteeMeetings`, `GetUpcomingInvestorEvents` |
 | company-deep-dive | `GetFinancialFact`, `GetFinancialStatement`, `ListFilings`, `SearchDocument`, `ReadDocumentLines`, `GetInvestorRelationsNews`, `GetGuidance`, `GetAnalystEstimates`, `GetEarningsCallTranscript`, `GetUpcomingInvestorEvents` |
 | technical-analysis | `GetStockPrices`, `GetLiveQuote`, `GetLatestClosingPrices`, `GetAverageTrueRange`, `GetBollingerBands`, `GetStochasticOscillator`, `GetOnBalanceVolume`, `GetUpcomingInvestorEvents` |
+| congress-analyst (candidate signal) | `GetCongressionalTrades`, `SearchCongressMembers`, `GetMemberNetWorth` (context only), plus `Read` on the run's `congress_rankings.md` |
+| congress-analyst-rankings (periodic, §10.1) | `GetMarketWideCongressionalActivity`, `GetMemberTrades`, `SearchCongressMembers`, `GetStockPrices` |
 | follow-up (Agent 5) | `GetLiveQuote`, `GetStockPrices`, `ListFilings`, `GetInvestorRelationsNews`, plus `Read` on **all** of `agents/` and `positions/`, not on `decisions/` (§7) |
 | middleware | none directly; launches the agents, reads/writes `runs/` and `decisions/` |
 
@@ -309,6 +316,12 @@ from reasoning review.
 | D3 | Rules and outcome arithmetic move into prompts. The technical-analysis agent reads the investor profile (`workspace/profile.json`, else `profile.example.json`; copied into each run) and applies the rules; follow-up and evaluators read it for `level_trigger`. |
 | D4 | Agentic only for now. No side-by-side run with the Python pipeline. |
 | D5 | Call budgets and per-agent models are not considered for now. |
+
+**Decided (2026-09-28):**
+
+| # | Decision |
+|---|---|
+| D6 | Congressional trading signal (ARCHITECTURE.md §5, 2026-09-28): a new `congress-analyst` agent, not folded into company-deep-dive; a single bounded number (`congress_adjustment`, ±0.15), never a verdict, never gating; scorecard built periodically (`congress-analyst-rankings`, cached, copied per run) rather than on every run; backtests get a point-in-time scorecard from the gatekeeper, not from `congress-analyst-rankings` (§10.1). |
 
 
 ## 9. Suggested order
@@ -429,6 +442,22 @@ audit.md             pit-auditor verdict: clean | leaks (field, file, date)
 Forward testing (every live run, graded by the evaluators as outcomes arrive) stays the
 main evidence.
 
+### 10.1 Congress-analyst: live scorecard vs. backtest pack
+
+Live runs get their scorecard from `congress-analyst-rankings`: a periodic,
+market-wide build (`/congress-rankings`) cached at `workspace/congress/member_rankings.md`
+and copied into each run. That build itself calls `GetStockPrices` for forward returns
+computed from **today's** vantage point — fine for live use, but exactly the kind of
+"now" tool a backtest can't touch (§10 point 1).
+
+So a backtest never runs `congress-analyst-rankings`. Instead the **gatekeeper** builds
+the scorecard as part of the congress-analyst stage's pack, following the same
+scoring steps (`prompts/congress-analyst/rankings.md`) but with the point-in-time rule
+doubled: not just "every trade used was filed before `as_of`" (the usual gatekeeper
+discipline), but "every purchase counted as *resolved* had its forward-return window
+close before `as_of`, too" — the resolution date is itself a fact that can leak the
+future even when the underlying trade's filing didn't. The pit-auditor checks both.
+
 ## 11. Running it
 
 **Models.** Each subagent file sets its `model` and `effort`; the commands (the
@@ -442,6 +471,8 @@ default effort is `xhigh`, which the first runs used everywhere.
 | sector-deep-dive | Sonnet 5 | low | Volume screening of ~25 companies |
 | company-deep-dive | Opus 5 | medium | The deepest judgment: filings, catalysts, risks |
 | technical-analysis | Sonnet 5 | medium | Levels from computed statistics; the middleware re-checks the rule arithmetic |
+| congress-analyst | Sonnet 5 | low | Bounded arithmetic over a handful of trades against a cached scorecard |
+| congress-analyst-rankings | Sonnet 5 | medium | Volume screening across the active roster, like sector-deep-dive |
 | follow-up | Sonnet 5 | medium | Mostly mechanical tripwires, a periodic review |
 | stage-evaluator | Sonnet 5 | medium | Outcome arithmetic and grading |
 | stage-feedback | Opus 5 | high | Rare, and a lesson changes a prompt |

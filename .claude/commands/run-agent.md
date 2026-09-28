@@ -11,9 +11,11 @@ Run a single agent in isolation mode. Arguments: $ARGUMENTS
 
 Agents available: `market-scanner` (subject: `market`), `sector-deep-dive`
 (subject: a sector name, e.g. "Energy"; optionally "upside"/"downside"),
-`company-deep-dive` and `technical-analysis` (subject: a ticker; optionally
-"long"/"short"). For `technical-analysis`, copy the profile into the run folder as
-usual and pass it in the brief.
+`company-deep-dive`, `technical-analysis` and `congress-analyst` (subject: a ticker;
+optionally "long"/"short"). For `technical-analysis`, copy the profile into the run
+folder as usual and pass it in the brief. For `congress-analyst`, also copy
+`workspace/congress/member_rankings.md` into the run folder as `congress_rankings.md`
+if it exists; if it doesn't, tell the user to run `/congress-rankings` first and stop.
 
 With `--as-of` in the past, run the agent as a one-stage backtest instead: follow
 `prompts/middleware/backtest.md` (lessons as of the date, gatekeeper pack, audit, the

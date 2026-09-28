@@ -22,7 +22,11 @@ and report to the user. You never place trades. File formats: `prompts/formats.m
    `git status --porcelain prompts .claude` prints anything.
 3. Profile: `workspace/profile.json` if it exists, else `profile.example.json`. Copy it
    to `workspace/runs/<run_id>/profile.json`.
-4. Write `workspace/runs/<run_id>/run.md` (`status: running`, empty sections).
+4. Scorecard: if `workspace/congress/member_rankings.md` exists, copy it to
+   `workspace/runs/<run_id>/congress_rankings.md`. If it doesn't, congress-analyst still
+   runs (per its role, it reports `congress_adjustment: 0.0` and a data gap rather than
+   failing).
+5. Write `workspace/runs/<run_id>/run.md` (`status: running`, empty sections).
 
 **Keep bookkeeping light; it sits on the critical path.** Between stages, only add
 the finished stage's rows to the "Stages" table in `run.md` (one line per agent). Write
@@ -89,9 +93,17 @@ deep dive's folder. Task: `Candidate <candidate_id>: <TICKER>, <long|short>.`
 A `verdict: reject` stops the candidate; record it under "Not pursued" with the thesis
 in one line.
 
-**Technical analysis:** launch one `technical-analysis` per candidate that passed, in
-parallel. Subject: the ticker. Upstream: the company deep dive's folder. Profile: the
-run's `profile.json`. Task: `Candidate <candidate_id>: <TICKER>, <long|short>.`
+**Technical analysis and congress analyst:** launch one `technical-analysis` **and**
+one `congress-analyst` per candidate that passed, in parallel (both agents, all
+candidates, one batch of foreground launches). Subject: the ticker. Upstream: the
+company deep dive's folder. `technical-analysis` also gets the profile;
+`congress-analyst` also gets `workspace/runs/<run_id>/congress_rankings.md`. Task:
+`Candidate <candidate_id>: <TICKER>, <long|short>.`
+
+`congress-analyst` never rejects and never blocks the recommendation check below; its
+`congress_adjustment` is carried into the report as an attributed number, the same way
+the confidence values already are, and never changes technical-analysis's own verdict
+or plan.
 
 **Recommendation check.** Read the technical frontmatter. The candidate is recommended
 only if `verdict: pass`, a `plan` is present and no rule has `outcome: reject`. Before

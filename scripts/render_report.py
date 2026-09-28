@@ -128,6 +128,27 @@ def confidence_bar(label: str, value: Any) -> str:
             f'<b>{v:.2f}</b></div>')
 
 
+def congress_html(rec: dict[str, Any]) -> str:
+    sig = rec.get("congress_signal")
+    if not sig:
+        return ""
+    adj = num(sig.get("adjustment"))
+    if adj is None:
+        return ""
+    sign_cls = "long" if adj > 0 else ("short" if adj < 0 else "neutral")
+    members = sig.get("top_members") or []
+    members_html = "".join(
+        f'<li>{e(m.get("member"))} · {e(m.get("type"))} filed {e(m.get("filed"))} '
+        f'(member_score {num(m.get("member_score")):.2f})</li>'
+        for m in members if num(m.get("member_score")) is not None
+    )
+    return (f'<h4>Congressional signal</h4>'
+            f'<p>{chip(f"{adj:+.2f}", sign_cls)} '
+            f'<span class="muted">{sig.get("trades_considered", 0)} trade(s), '
+            f'{sig.get("members_scored", 0)} scored member(s)</span></p>'
+            + (f'<ul class="cats">{members_html}</ul>' if members_html else ""))
+
+
 def rec_card(rec: dict[str, Any], profile: dict[str, Any]) -> str:
     m = plan_metrics(rec)
     direction = (rec.get("direction") or "").lower()
@@ -211,6 +232,7 @@ def rec_card(rec: dict[str, Any], profile: dict[str, Any]) -> str:
       <h4>Agent confidence</h4>
       {confidence_bar('Company deep dive', conf.get('company_deep_dive'))}
       {confidence_bar('Technical analysis', conf.get('technical_analysis'))}
+      {congress_html(rec)}
     </section>
   </div>
   <footer class="card-foot">

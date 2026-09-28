@@ -21,11 +21,12 @@ As of <as_of> · prompt <prompt_commit> · profile <name> · options <...>
 |---|---|---|---|---|---|---|
 
 ## Candidates
-| Candidate | Company deep dive | Catalysts (verified / unverified / contradicted) | Technical | Why, in one line |
-|---|---|---|---|---|
+| Candidate | Company deep dive | Catalysts (verified / unverified / contradicted) | Technical | Congressional | Why, in one line |
+|---|---|---|---|---|---|
 
 ## Recommendations
-<candidate_id, ticker, direction, entry / stop / target, horizon, rule flags>
+<candidate_id, ticker, direction, entry / stop / target, horizon, rule flags,
+congress_adjustment (with the members that drove it, if non-zero)>
 <"None: ..." with the reason when empty>
 
 ## Not pursued / rejected
@@ -79,8 +80,12 @@ as for `report.md`: copy the agents' values and words, never soften or add to th
     "flags": [{"rule": "upcoming_earnings", "detail": "2026-10-31 (confirmed) in 36 days, inside 45"}],
     "key_risks": ["<at most 3 risks from the two analyses' Risks considered, one line each>"],
     "confidence": {"company_deep_dive": 0.7, "technical_analysis": 0.6},
+    "congress_signal": {"adjustment": 0.04, "trades_considered": 3, "members_scored": 3,
+                         "scorecard_as_of": "2026-09-01T00:00:00Z",
+                         "top_members": [{"member": "Jane Doe", "type": "Purchase", "filed": "2026-09-15", "member_score": 0.8}]},
     "files": {"company_deep_dive": "workspace/agents/company-deep-dive/analyses/<run_id>/XOM",
-              "technical_analysis": "workspace/agents/technical-analysis/analyses/<run_id>/XOM"}
+              "technical_analysis": "workspace/agents/technical-analysis/analyses/<run_id>/XOM",
+              "congress_analyst": "workspace/agents/congress-analyst/analyses/<run_id>/XOM"}
   }],
   "no_recommendation_reason": null,
   "market": {"summary": "<the one-paragraph market summary from report.md>",
@@ -93,7 +98,10 @@ as for `report.md`: copy the agents' values and words, never soften or add to th
 
 - Plan numbers, flags, catalysts, `next_earnings` and confidences are copied from the
   frontmatter of the candidate's technical-analysis and company-deep-dive `output.md`;
-  `flags` are the technical rules with `outcome: flag`.
+  `flags` are the technical rules with `outcome: flag`. `congress_signal` is copied
+  from the candidate's congress-analyst `output.md`; omit it (`null`) if that agent
+  wasn't run or reported no scorecard. It never affects `recommendations` membership or
+  the plan numbers — congress-analyst has no reject power.
 - With no recommendations, `recommendations` is `[]` and `no_recommendation_reason` is
   the "None: ..." line of `report.md`.
 - Backtests: `backtest` is `{"point_in_time": "<audited | leaks-found>", "limits":

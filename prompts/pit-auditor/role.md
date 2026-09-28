@@ -20,6 +20,13 @@ Your brief names the pack folder and `as_of`. The rules the pack must follow are
    - FDA meetings: at most 15 days after `as_of`, and no outcomes.
    - Calendar entries after `as_of`: names and dates only, no values.
    - Text inside documents or transcripts that reports a later event or later numbers.
+   - Congressional trades (`congress-scorecard.md` or the ticker's trades file): every
+     row's **filing** date, not its transaction date, must be an earlier New York day
+     than `as_of`.
+   - `congress-scorecard.md` specifically: every resolved purchase it used must satisfy
+     `disclosure_date + horizon_days` before `as_of` too, not just the filing itself —
+     a scorecard entry can leak by using a forward return that hadn't happened yet even
+     when the underlying trade was properly filed before `as_of`.
 2. No data from a tool the rules say never to use (`GetLiveQuote`,
    `GetLatestClosingPrices`, `ScreenStocks`, `GetValuationMultiples`,
    `GetAnalystEstimates`, `GetUpcomingInvestorEvents`).

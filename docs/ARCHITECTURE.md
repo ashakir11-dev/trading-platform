@@ -24,6 +24,7 @@ flowchart TD
     A1["Agent 1 - Sector Deep Dive<br/>per sector → shortlist of ~10-30 companies"]
     A2["Company Deep Dive<br/>per company → worthiness, scrutinize catalysts"]
     A3["Technical Analysis<br/>per company → chart viability, entry/exit/stop, can reject"]
+    A4["Congress Analyst<br/>per company → bounded numeric confidence adjustment, never rejects"]
     MW["Middleware<br/>reports to user; user makes the real call"]
     A5["Agent 5 - Follow-Up Loop<br/>tripwires + periodic full re-review"]
     OUT["Outcomes Agent<br/>real financial results, no judgment"]
@@ -32,11 +33,13 @@ flowchart TD
     A0 -->|sectors + raw data| A1
     A1 -->|shortlist + raw data| A2
     A2 -->|survivors + raw data| A3
+    A2 -->|survivors + raw data| A4
     A3 -->|surviving picks| MW
+    A4 -.confidence adjustment, attribution only.-> MW
     MW -->|accepted positions| A5
     A5 -.-> OUT
     A5 -.-> PROC
-    A0 & A1 & A2 & A3 -.reasoning log.-> PROC
+    A0 & A1 & A2 & A3 & A4 -.reasoning log.-> PROC
     OUT -.-> PROC
     PROC -.improvement signal.-> A0
 ```
@@ -51,6 +54,7 @@ Step-by-step runtime flow (sequence diagrams): [`sequence-diagrams.md`](sequence
 | Agent 1: Sector Deep Dive | `sector-deep-dive` | one per sector, in parallel | sector call + **bulk screen of the sector's companies** (ratios, size, prices, recent filings/events) + breadth, FDA, earnings | shortlist **ranked by potential score** |
 | Company Deep Dive | `company-deep-dive` | one per company, in parallel | shortlist entry + market/sector/macro data + **full company data** (fundamentals, filings, guidance, estimates, transcripts, insider and short data) | worthiness verdict; catalysts checked |
 | Technical Analysis | `technical-analysis` | one per company, in parallel, **no cross-comparison** | candidate + **investor profile** + price statistics, swing levels and weekly bars for the horizon's charts + earnings date | chart verdict + entry / stop / target / horizon / chart timeframe, or rejection; then the **profile's rules** |
+| Congress Analyst | `congress-analyst` | one per company, in parallel with technical analysis; **never rejects** | candidate + direction + the cached **member scorecard** + the ticker's disclosed congressional trades | a bounded numeric confidence adjustment (±0.15), attribution only |
 | Middleware | the commands in `.claude/commands/` | orchestrates | | report to the user; records the user's decisions |
 | Agent 5: Follow-Up | `follow-up` | on a schedule, per accepted position | position + profile + fresh data + every earlier analysis | tripwire checks (price vs stop/target, **material** news only) with a **12h alert cooldown**, plus a full re-review on alert or every 14 days |
 | Evaluation | `stage-evaluator` | per agent and past run | the agent's analyses + prices since | **outcome facts** (no judgment), then **reasoning-quality grades** with an attribution per miss |
@@ -175,6 +179,15 @@ recorded and delivered with the next alert, so nothing material is lost.
 | Forward testing | Every live run is graded by the evaluators as outcomes arrive, including candidates nobody traded: the "shadow ledger" of [`testing-research.md`](testing-research.md), Phase 0. |
 | Models (D5, revisited) | Per agent, in `.claude/agents/` (design doc §11). |
 
+**Decided (2026-09-28):**
+
+| Decision | Choice | Why |
+|---|---|---|
+| Congressional trading signal | **A new agent (`congress-analyst`), not folded into company-deep-dive.** Runs per candidate, in parallel with technical-analysis, reading the candidate's disclosed congressional trades against a cached, periodically rebuilt **member scorecard** (win rate + avg forward return of each member's disclosed purchases, min 10 resolved purchases to qualify). | Keeps it a third, uncorrelated read (principle 3) instead of diluting company-deep-dive's fundamentals judgment; evaluable on its own. |
+| Its output | **A single bounded number, `congress_adjustment` (±0.15 max), not a verdict.** Computed as `member_score × direction_match × recency_weight` per trade, averaged per member then across members, clamped and scaled. **Never gates**: no reject rule, doesn't affect the recommendation check, recorded like the running confidence score (attribution only). | Answers "boost our confidence," not "should we take this trade" — that split already governs technical-analysis's rules vs. the running confidence score. |
+| Scorecard cadence | **Rebuilt periodically (`/congress-rankings`, e.g. monthly), not on every run.** Every run copies the current scorecard into its own folder for provenance (`workspace/runs/<run_id>/congress_rankings.md`), the way it copies the investor profile. | Building it needs a price lookup per historical trade across the whole active roster; too expensive to repeat on every `/run`. |
+| Backtests | **The gatekeeper builds a point-in-time scorecard itself**, not `congress-analyst-rankings`: only trades filed before `as_of`, and only purchases whose forward-return window (filing + horizon) also closes before `as_of`. | A scorecard entry can leak the future even when the underlying trade was properly filed before `as_of`, if its forward return hadn't happened yet. |
+
 **Open:**
 
 - **Plan margins.** Recommendations have repeatedly sat right at the profile's limits
@@ -221,6 +234,7 @@ read-only tools listed in its definition (`.claude/agents/`); the account tools
 | Expectations | `GetGuidance`, `GetAnalystEstimates`, `GetEarningsCallTranscript` | company | Estimates are "now only" (never in backtests). |
 | Ownership and risk | `GetInsiderTransactions`, `GetShortInterest`, `GetDebtProfile`, `GetGoingConcernStatus` | company | |
 | Macro | `GetEconomicIndicator`, `GetLatestEconomicIndicators`, `GetEconomicCalendar`, `GetVixHistory`, `GetPutCallRatios` | scanner (others read its `raw/`) | 13 FRED series; a value counts after its period ends plus the publication lag. Latest-revised values (no vintages). |
+| Congressional trading | `GetCongressionalTrades`, `GetMemberTrades`, `GetMarketWideCongressionalActivity`, `GetMemberNetWorth`, `SearchCongressMembers` | congress-analyst | Disclosed amounts are ranges, not exact values; a trade counts from its **filing** date (up to 45 days after the transaction, per the STOCK Act), not the transaction date. Net worth is context only, never part of the scorecard (wealth isn't trading skill, and it's disclosed as bands too). No "list every member" tool: the scorecard build discovers active members from `GetMarketWideCongressionalActivity`. |
 | Third-party news, PDUFA dates, macro vintages, FOMC dates | Not provided | | **Deferred** |
 
 Backtests replace direct access with the gatekeeper's data packs; the per-tool
@@ -262,7 +276,9 @@ running it.
 decisions firewall and raw-data capture (hooks), price statistics, a one-stage backtest.
 
 **Built, not yet exercised end to end:** follow-up (`/follow-up`, `/trade`), evaluation
-and feedback (`/evaluate`, `/feedback`, `/approve`), a full four-stage backtest.
+and feedback (`/evaluate`, `/feedback`, `/approve`), a full four-stage backtest, the
+congress-analyst agent (candidate-signal and rankings modes, `/congress-rankings`) and
+its backtest pack/scorecard build in the gatekeeper.
 
 **Still open:**
 - **Plan margins** (§5).

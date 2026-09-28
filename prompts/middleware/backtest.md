@@ -19,6 +19,10 @@ launch, you first have its data pack built and audited.
 
 ## For every stage agent: pack → audit → agent
 
+Technical-analysis and congress-analyst both read the company deep dive's folder and
+run over the same candidates; build and audit both stages' packs before launching
+either `-backtest` agent, same as the live run launches both in parallel.
+
 1. **Gatekeeper:** launch `gatekeeper` with: `stage`, `subject`, `as_of`, `run_id`,
    `pack: workspace/runs/<run_id>/packs/<stage>/<subject>`, the upstream analysis folders
    the stage agent will get, and `allow_current_constituents` for the sector stage.

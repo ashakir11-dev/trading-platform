@@ -16,6 +16,9 @@ Run the pipeline end to end, live, as of now. Options: $ARGUMENTS
    sector and its direction).
 5. Apply the forwarding rules to the shortlists.
 6. Launch one `company-deep-dive` per forwarded candidate, in parallel.
-7. Launch one `technical-analysis` per candidate that passed, in parallel.
+7. Launch one `technical-analysis` **and** one `congress-analyst` per candidate that
+   passed, in parallel (both read the company deep dive's folder; congress-analyst
+   also needs `workspace/runs/<run_id>/congress_rankings.md`, copied from
+   `workspace/congress/member_rankings.md` if it exists, else skipped with a note).
 8. Run the recommendation check.
 9. Write the report, render the showcase page (`report.html`) and show the report.

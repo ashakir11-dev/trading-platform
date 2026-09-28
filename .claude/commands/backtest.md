@@ -10,6 +10,9 @@ You are the middleware agent. Read `prompts/middleware/role.md`,
 Run the pipeline end to end as a backtest. Options: $ARGUMENTS
 
 Same stages and forwarding rules as `/run` (market-scanner → sector-deep-dive per
-pursued sector → company-deep-dive per candidate → technical-analysis per passing
-candidate → recommendation check → report and `report.html`), but every stage agent is its `-backtest` variant and
-gets an audited data pack built first, as `prompts/middleware/backtest.md` describes.
+pursued sector → company-deep-dive per candidate → technical-analysis **and**
+congress-analyst per passing candidate → recommendation check → report and
+`report.html`), but every stage agent is its `-backtest` variant and gets an audited
+data pack built first, as `prompts/middleware/backtest.md` describes. The scorecard
+itself is point-in-time too: the gatekeeper builds it, not `congress-analyst-rankings`
+(§ below).
