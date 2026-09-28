@@ -25,8 +25,8 @@ flowchart TD
     A0["Agent 0 - Market Scanner<br/>market → sectors with upside/downside potential"]
     A1["Agent 1 - Sector Deep Dive<br/>per sector → shortlist of ~10-30 companies,<br/>scored + risk-bucketed (core/growth/speculative)"]
     A2["Company Deep Dive<br/>per company → worthiness, scrutinize catalysts"]
-    A3["Technical Analysis<br/>per company → chart viability, entry/exit/stop,<br/>vs its risk bucket's rules, can reject"]
-    MW["Middleware<br/>reports to user; user makes the real call"]
+    A3["Technical Analysis<br/>per company → chart viability, entry / stop / scale-out targets,<br/>vs its risk bucket's profile, can reject"]
+    MW["Middleware<br/>picks ≤1 per bucket, tracks the rest; reports to user;<br/>user decides; sized paper order on accept"]
     A5["Agent 5 - Follow-Up Loop<br/>tripwires + periodic full re-review"]
     OUT["Outcomes Agent<br/>real financial results, no judgment"]
     PROC["Process Agent<br/>reasoning quality per stage, incl. foreseeable risk"]
@@ -52,9 +52,9 @@ Step-by-step runtime flow (sequence diagrams): [`sequence-diagrams.md`](sequence
 | Agent 0: Market Scanner | `market-scanner` | once per run | sector ETF performance + macro data | sectors with upside/downside potential |
 | Agent 1: Sector Deep Dive | `sector-deep-dive` | one per sector, in parallel | sector call + **bulk screen of the sector's companies** (ratios, size, prices, recent filings/events) + breadth, FDA, earnings | shortlist **ranked by potential score**, each with a **risk bucket** (§4a) |
 | Company Deep Dive | `company-deep-dive` | one per company, in parallel | shortlist entry + market/sector/macro data + **full company data** (fundamentals, filings, guidance, estimates, transcripts, insider and short data) | worthiness verdict; catalysts checked |
-| Technical Analysis | `technical-analysis` | one per company, in parallel, **no cross-comparison** | candidate + **investor profile** + price statistics, swing levels and weekly bars for the horizon's charts + earnings date | chart verdict + entry / stop / target / horizon / chart timeframe, or rejection; then the **profile's rules** |
-| Middleware | the commands in `.claude/commands/` | orchestrates | | report to the user; records the user's decisions |
-| Agent 5: Follow-Up | `follow-up` | on a schedule, per accepted position | position + profile + fresh data + every earlier analysis | tripwire checks (price vs stop/target, **material** news only) with a **12h alert cooldown**, plus a full re-review on alert or every 14 days |
+| Technical Analysis | `technical-analysis` | one per company, in parallel, **no cross-comparison** | candidate + its **bucket's risk profile** + price statistics (returns, MAs, ATR, RSI, MACD, VWAP, relative volume), swing levels and weekly bars for the horizon's charts + SPY for relative strength + earnings date | chart verdict + entry / stop / scale-out targets / horizon / chart timeframe / entry deadline, or rejection; then the **bucket's rules** |
+| Middleware | the commands in `.claude/commands/` | orchestrates | | recomputes every plan, picks **≤1 recommendation per bucket** (the rest "also passed"), reports to the user with charts; records decisions and places the sized **paper** entry order on accept |
+| Agent 5: Follow-Up | `follow-up` | on a schedule, per accepted position | position + profile + fresh data + every earlier analysis | tripwire checks (price vs stop / each target, missed or **expired** entry, **max hold**, **material** news only) with a **12h alert cooldown**, plus a full re-review on alert or every 14 days |
 | Evaluation | `stage-evaluator` | per agent and past run | the agent's analyses + prices since | **outcome facts** (no judgment), then **reasoning-quality grades** with an attribution per miss |
 | Feedback | `stage-feedback` | per agent, on request | the agent's evaluations | proposed lessons; added to prompts only after the user approves |
 
@@ -93,11 +93,14 @@ Step-by-step runtime flow (sequence diagrams): [`sequence-diagrams.md`](sequence
 
 **Investor profile** (`workspace/profile.json`, example in `profile.example.json`): who the pipeline works for. It holds settings shared across every
 trade (whether shorts are allowed, how stop/target hits are detected — `level_trigger`
-— and free-text notes) plus a **`buckets` map**: one set of holding horizons, maximum
-loss per trade, minimum reward:risk and target return **per risk bucket** (§4a). It is
-the user's *preferences*, set up front, not a decision, so showing it to agents does not
-break the one-way middleware principle. The technical agent and Agent 5's full review
-read it, and the rules enforce it.
+—, the maximum hold per horizon and free-text notes) plus a **`buckets` map: one
+complete risk profile per risk bucket** (§4a): allowed and preferred horizons, entry
+style, maximum loss per trade, minimum reward:risk, target return, how many scale-out
+targets, position size as a percentage of the account and how long an untriggered entry
+stays valid. It is the user's *preferences*, set up front, not a decision, so showing it
+to agents does not break the one-way middleware principle. The technical agent and
+Agent 5's full review read it, the rules enforce it, and the middleware sizes paper
+orders from it.
 
 ### 4a. Risk buckets
 
@@ -121,17 +124,54 @@ meaningful catalyst doesn't get a bucket at all — it's `passed: false`, same a
   it at Agent 1 would blur principle 3 (fundamental and technical are independent
   filters) by letting a chart-shaped judgment leak into the fundamental screen.
 - **The bucket selects a profile, not a plan.** Technical analysis still derives entry,
-  stop and target from chart structure alone — a bucket never dictates a literal stop
-  distance a chart doesn't support. What the bucket picks is *which* limits from
-  `profile.json`'s `buckets` map apply (`max_loss_per_trade_pct`, `min_reward_to_risk`,
-  allowed `horizons`, `target_return_pct`) when the technical agent checks its plan
-  against the rules. A `core` company that can't produce a plan inside the `core`
-  bucket's tighter limits is rejected, same as any other rule failure — its levels are
-  never loosened to fit.
+  stop and targets from chart structure alone — a bucket never dictates a literal stop
+  distance a chart doesn't support. What the bucket picks is *which* profile from
+  `profile.json`'s `buckets` map applies. Each bucket's profile shapes the trade in
+  five ways, so that a `core` and a `speculative` plan genuinely differ and not only in
+  the caps they clear: the **limits** (`max_loss_per_trade_pct`, `min_reward_to_risk`,
+  `target_return_pct`), the **horizon** (`horizons` allowed, `preferred_horizon` the
+  default — core leans `long_term`, speculative is swing-only), the **entry style**
+  (`pullback` buys support inside a trend, `breakout` buys a confirmed break of
+  resistance, `either`; a mismatch is a flag), the **scale-out** (`max_targets`: core
+  takes one target, speculative up to three), and the **size** (`position_size_pct` of
+  the account, e.g. core 3% / growth 2% / speculative 1%) plus how long the entry stays
+  valid (`entry_valid_trading_days`). A `core` company that can't produce a plan inside
+  the `core` profile is rejected, same as any other rule failure — its levels are never
+  loosened to fit.
 - **Carried through, not recomputed.** The bucket travels with the candidate from the
   "Forwarded" list through company deep dive (unused there, kept for the record) to
   technical analysis, and into the position file, so follow-up's full re-review checks
-  a new plan against the same bucket's limits.
+  a new plan against the same bucket's profile and the paper order is sized from it.
+
+### 4b. From eligible to recommended, and into the paper account
+
+- **Eligible ≠ recommended.** A candidate is *eligible* when it passes every stage and
+  the middleware's own recomputation of its plan. From the eligible candidates the
+  middleware recommends **at most one per bucket**: the highest *pick score*
+  (company-deep-dive confidence × technical-analysis confidence; ties on
+  `potential_score`, then reward:risk). The rest are listed in the report as **"also
+  passed"** — visible, decidable, never hidden — and the evaluator grades them exactly
+  like the picks. That shadow ledger is what tests the pick rule: if the also-passed
+  outperform the picks, the rule is wrong and the feedback loop should say so. The
+  middleware never re-ranks on its own judgment.
+- **Scale-out targets.** A plan carries `targets: [{price, fraction}]`, nearest first,
+  fractions summing to 1, at most the bucket's `max_targets`, each at a level the chart
+  supports; `target` is the size-weighted mean and is what the ratio rules use. Scaling
+  *in* (multiple entries) is deliberately not supported: it blurs max-loss, "was the
+  entry filled" and the entry deadline; revisit after partial exits have been observed
+  in follow-up.
+- **Deadlines.** `entry_valid_until` (from the bucket's `entry_valid_trading_days`) —
+  an entry not triggered by then expires and the position is closed as never opened;
+  `max_hold_trading_days` per horizon (profile-wide) — a position held longer triggers
+  a full re-review with `exit` as the default recommendation.
+- **Paper execution on accept.** `/decide accept` records the decision as before and
+  then, if paper credentials are present, sizes the entry from the account's equity and
+  the bucket's `position_size_pct` (`qty = floor(size × equity / entry)`) and places a
+  **stop-limit or limit order at the plan's entry** (never a market order: the entry
+  condition *is* the price), good till cancelled; `/follow-up` records the fill or
+  cancels it at expiry. Stops and targets are watched by the follow-up agent, not
+  parked at the broker, and every exit is still the user's command. Execution stays
+  paper-only, middleware-only and user-triggered, as CLAUDE.md requires.
 
 **Horizons and chart timeframes.** Each horizon has its own charts; the technical
 agent reads levels from the primary chart and trend from the context chart, and
@@ -156,12 +196,14 @@ in the report.
 
 | Rule | Outcome | When |
 |---|---|---|
-| `plan_price_order` | reject | long needs stop < entry < target; short the reverse |
+| `plan_price_order` | reject | long needs stop < entry < every target; short the reverse |
+| `targets_shape` | reject | more targets than the bucket's `max_targets`, fractions not summing to 1, or not ordered nearest-first |
 | `profile_horizon` | reject | plan horizon not in the candidate's bucket's horizons |
+| `entry_style` | flag | entry not in the bucket's `entry_style` (pullback / breakout) |
 | `chart_timeframe` | flag | plan levels not read from the horizon's primary chart |
 | `profile_short` | reject | short plan when shorts are not allowed; downside sector calls are then not pursued |
 | `max_loss` | reject | stop further from entry than `max_loss_per_trade_pct` |
-| `reward_to_risk` | reject | reward:risk below `min_reward_to_risk` |
+| `reward_to_risk` | reject | reward:risk below `min_reward_to_risk`, measured to the size-weighted target |
 | `stale_entry` | reject | price already more than `stale_entry_max_drift_pct` (3%) past the entry, or through the stop. Live runs use the live quote; backtests use the last close at `as_of`. A price that hasn't reached the entry yet is fine. |
 | `upcoming_earnings` | flag | earnings inside the horizon's window, or the date is unknown |
 
@@ -218,6 +260,14 @@ recorded and delivered with the next alert, so nothing material is lost.
 | Decision | Choice | Why |
 |---|---|---|
 | Risk buckets (§4a) | Agent 1 assigns each passing company a `risk_bucket` (`core`/`growth`/`speculative`) from conviction × catalyst-type magnitude, alongside `potential_score`; `profile.json` becomes a `buckets` map of per-bucket limits; technical analysis applies the candidate's bucket's limits. Assigned once at Agent 1, never re-scored downstream; magnitude comes from catalyst type, never chart volatility. | A single 0-100 score conflated conviction with reward shape ("safe and likely" vs. "risky but big" are different trade types, not different ranks). Fixing the bucket at Agent 1 keeps one company mapped to one candidate and keeps the fundamental/technical filters independent (principle 3). |
+| One risk profile per bucket (§4a) | Each bucket is a **complete profile**: limits, allowed + preferred horizon, entry style, `max_targets`, `position_size_pct`, `entry_valid_trading_days`. Not several profiles per bucket. | With only caps differing, every plan looked the same; behaviour (size, horizon, entry style) is what makes a core trade and a speculative trade different. Several profiles per bucket would fork one candidate into several plans. |
+| One recommendation per bucket (§4b) | The middleware recommends the highest pick score (company × technical confidence) per bucket; every other eligible candidate is reported as "also passed" and graded identically. | 22 recommendations from one run is a screen, not decision support; the also-passed shadow ledger is what tests whether the pick rule picks well. |
+| Scale-out, not scale-in (§4b) | Plans carry up to `max_targets` targets with fractions; reward:risk uses the size-weighted target. Multiple entries are not supported. | Partial exits are the tractable half; multiple entries blur max-loss, fill detection and the entry deadline. |
+| Deadlines (§4b) | `entry_valid_until` per plan (bucket's `entry_valid_trading_days`) and `max_hold_trading_days` per horizon; follow-up enforces both. | Untriggered breakout entries were live forever; there was no notion of a stale plan. |
+| Paper order on accept (§4b) | `/decide accept` sizes the entry from account equity × `position_size_pct` and places a stop-limit/limit order at the plan's entry (GTC); `/follow-up` records fills and cancels at expiry. Stops/targets stay with the follow-up agent; exits remain the user's command. | Forward testing needs the sized entry actually in the paper account, and the bucket profile is where the size belongs. Kept middleware-only and user-triggered per the hard rules. |
+| Shorts on by default | `profile.example.json` ships `allow_short: true`; the short path (mirrored rules, downside sector calls, `sell` entry / `buy` exit at the broker) is exercised but not yet validated by an isolated downside run. | The scanner's most confident calls are often downside; ignoring them halves the pipeline's reach. Verification is an operations step, not a design one. |
+| Indicators in `price_stats.py` | RSI14, MACD(12,26,9), 20-bar VWAP and relative volume are computed by the hook from the bars already fetched; relative strength vs SPY comes from a second `GetStockPrices` call the technical agent makes. | Equibles has no RSI/MACD/VWAP tools; computing them from fetched bars is arithmetic, keeps Equibles the only source and keeps every number reproducible from `raw/`. |
+| Charts in the report | `report.html` draws the primary-timeframe candlesticks, SMA20/50 and the plan's levels from the technical agent's own `raw/` bars; cards collapse to a one-line trade summary. No external chart source. | A TradingView-style feed would be a second data vendor and would not show the bars the agent actually reasoned over. |
 | Broker paper trading | **Added, scoped to forward testing.** `scripts/broker_alpaca.py` places and checks orders against Alpaca's paper-trading endpoint only (hard-coded, no live-account path). It is a plain script, not an MCP tool or subagent capability: no agent definition lists it, so no stage/follow-up/evaluator agent can call it, and `.claude/hooks/workspace_guard.py` denies any subagent `Bash` call naming it as defense in depth. Only the middleware agent runs it, and only from `/trade`'s new `broker-buy`/`broker-sell`/`broker-status` modes, triggered solely by the user typing that command. A filled order is recorded exactly like a manually-reported trade (`entered`/`exited` on `position.md`), plus the order id (`broker_entry_order_id`/`broker_exit_order_id`, `prompts/formats.md`). | Relaxes the no-orders rule enough for forward testing without weakening the one-way middleware principle or the decisions firewall: execution still requires the user's explicit `/trade` command, and no agent gains a path to place or influence an order. |
 | Alpaca MCP server | **Added, for interactive/manual use, not the pipeline.** `.mcp.json` adds the community `alpaca-mcp-server` (orders, positions, account, watchlists), with `ALPACA_PAPER_TRADE` pinned to the literal `"true"` in the checked-in config (not read from the environment), so flipping it to live trading requires a reviewed change to `.mcp.json` itself. No `.claude/agents/*.md` lists any `mcp__alpaca__*` tool, and `workspace_guard.py` denies the whole prefix to any subagent (`agent_id` set) as defense in depth — it is never a data source for an agent either (Equibles stays the only one). Only you, and the middleware agent if a command is later written to use it, can call it. | You wanted the full toolset (not just order submit/status) for hands-on testing against the real paper account; keeping it out of every subagent's tools and pinning paper mode in the repo (rather than trusting an env var) keeps the no-agent-execution guarantee and the paper-only guarantee both intact. |
 
@@ -226,6 +276,15 @@ recorded and delivered with the next alert, so nothing material is lost.
 - **Plan margins.** Recommendations have repeatedly sat right at the profile's limits
   (e.g. max loss 7.8% vs 8%, reward:risk 2.03 vs 2.0). Whether plans should keep a
   margin from the limits is the user's call.
+- **Short path validation.** Shorts are enabled but no downside sector has been run end
+  to end since the bucket/profile redesign; one isolated `/run-agent` on a downside call
+  (Utilities was the scanner's most confident call on 2026-09-28) should precede
+  trusting a short recommendation.
+- **Congressional trades** as a company-deep-dive input (Equibles has the tool; no agent
+  lists it), and a **macro gate** at the recommendation stage (a flag for a
+  high-importance release inside the horizon, mirroring `upcoming_earnings`): both
+  tracked, neither decided.
+- **Scale-in** (multiple entries): deferred until partial exits have been observed.
 
 **Future enhancements (not planned now):**
 

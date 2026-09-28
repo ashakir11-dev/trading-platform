@@ -88,6 +88,41 @@ def test_weekly_groups_by_iso_week():
     assert weeks[0].high == 6 and weeks[0].low == 0
 
 
+def test_rsi_extremes_and_midpoint():
+    _, up = ps.parse(table(list(range(1, 31))))          # only gains
+    assert ps.rsi(up) == 100.0
+    _, down = ps.parse(table(list(range(60, 30, -1))))   # only losses
+    assert ps.rsi(down) == pytest.approx(0.0)
+    _, flat = ps.parse(table([10.0, 11.0] * 15))         # equal gains and losses
+    assert 45.0 < ps.rsi(flat) < 55.0                    # Wilder smoothing tilts toward the last change
+    assert ps.rsi(up[:10]) is None
+
+
+def test_macd_is_zero_on_a_flat_series_and_positive_in_an_uptrend():
+    _, flat = ps.parse(table([100.0] * 60))
+    line, sig, hist = ps.macd(flat)
+    assert line == pytest.approx(0.0) and sig == pytest.approx(0.0) and hist == pytest.approx(0.0)
+    _, up = ps.parse(table([float(x) for x in range(1, 61)]))
+    assert ps.macd(up)[0] > 0
+    assert ps.macd(up[:30]) is None
+
+
+def test_vwap_and_relative_volume():
+    _, bars = ps.parse(table([100.0] * 25))              # typical price = 100, equal volumes
+    assert ps.vwap(bars) == pytest.approx(100.0)
+    assert ps.relative_volume(bars) == pytest.approx(1.0)
+    spike = bars[:-1] + [ps.Bar(bars[-1].day, 100, 101, 99, 100, 3000)]
+    assert ps.relative_volume(spike) == pytest.approx(3.0)
+    assert ps.vwap(bars[:5]) is None and ps.relative_volume(bars[:5]) is None
+
+
+def test_summary_reports_indicators():
+    text = ps.summary(table([float(x) for x in range(1, 61)]), raw_file="r.json")
+    assert "Indicators: RSI14 100.0; MACD(12,26,9) line" in text
+    assert "VWAP20" in text and "relative volume 1.00x" in text
+    assert "RSI14 n/a" in ps.summary(table([100.0] * 5), raw_file="r.json")
+
+
 def test_unparseable_response_raises():
     with pytest.raises(ValueError):
         ps.parse("No price data for XYZ.")

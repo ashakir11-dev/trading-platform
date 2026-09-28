@@ -12,8 +12,10 @@ Hard rules:
   against Alpaca's **paper** account, never live, and both usable only by the middleware agent /
   interactively by you — never by a stage, follow-up or evaluator agent:
   1. `scripts/broker_alpaca.py`, hard-coded to Alpaca's paper REST endpoint (not configurable to a live
-     account from this script). Not an MCP tool or subagent capability. `/trade`'s `broker-buy` /
-     `broker-sell` / `broker-status` modes are its only caller.
+     account from this script). Not an MCP tool or subagent capability. Its only callers are the
+     middleware commands the user types: `/decide ... accept` (the sized entry order, from the bucket's
+     `position_size_pct`), `/trade`'s `broker-buy` / `broker-sell` / `broker-status` modes, and
+     `/follow-up` (recording a fill, cancelling an expired entry). Never a market order for an entry.
   2. The `alpaca` MCP server (`.mcp.json`, the community `alpaca-mcp-server`), for interactive/manual use
      (orders, positions, watchlists). `ALPACA_PAPER_TRADE` is pinned to `"true"` as a literal in the
      checked-in `.mcp.json` (not `${...}`-substituted from the environment), so it can only be flipped to

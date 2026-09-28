@@ -63,12 +63,16 @@ def _request(method: str, path: str, body: dict[str, Any] | None = None) -> Any:
         raise BrokerError(f"Alpaca paper API {method} {path} -> {e.code}: {detail}") from e
 
 
+ORDER_TYPES = ("market", "limit", "stop", "stop_limit")
+
+
 def submit_order(symbol: str, side: str, qty: str, order_type: str = "market",
-                  time_in_force: str = "day", limit_price: str | None = None) -> dict[str, Any]:
+                  time_in_force: str = "day", limit_price: str | None = None,
+                  stop_price: str | None = None) -> dict[str, Any]:
     if side not in ("buy", "sell"):
         raise BrokerError("side must be 'buy' or 'sell'")
-    if order_type not in ("market", "limit"):
-        raise BrokerError("order_type must be 'market' or 'limit'")
+    if order_type not in ORDER_TYPES:
+        raise BrokerError(f"order_type must be one of {', '.join(ORDER_TYPES)}")
     body: dict[str, Any] = {
         "symbol": symbol.upper(),
         "qty": qty,
@@ -76,10 +80,14 @@ def submit_order(symbol: str, side: str, qty: str, order_type: str = "market",
         "type": order_type,
         "time_in_force": time_in_force,
     }
-    if order_type == "limit":
+    if order_type in ("limit", "stop_limit"):
         if not limit_price:
-            raise BrokerError("limit_price is required for a limit order")
+            raise BrokerError(f"limit_price is required for a {order_type} order")
         body["limit_price"] = limit_price
+    if order_type in ("stop", "stop_limit"):
+        if not stop_price:
+            raise BrokerError(f"stop_price is required for a {order_type} order")
+        body["stop_price"] = stop_price
     return _request("POST", "/v2/orders", body)
 
 
@@ -117,9 +125,10 @@ def _build_parser() -> argparse.ArgumentParser:
     submit.add_argument("--symbol", required=True)
     submit.add_argument("--side", required=True, choices=["buy", "sell"])
     submit.add_argument("--qty", required=True)
-    submit.add_argument("--type", dest="order_type", default="market", choices=["market", "limit"])
+    submit.add_argument("--type", dest="order_type", default="market", choices=list(ORDER_TYPES))
     submit.add_argument("--tif", dest="time_in_force", default="day")
     submit.add_argument("--limit-price")
+    submit.add_argument("--stop-price")
     submit.add_argument("--wait", type=int, default=0,
                          help="Seconds to poll for a terminal status before returning")
 
@@ -139,7 +148,7 @@ def main(argv: list[str]) -> int:
     try:
         if args.command == "submit":
             order = submit_order(args.symbol, args.side, args.qty, args.order_type,
-                                  args.time_in_force, args.limit_price)
+                                  args.time_in_force, args.limit_price, args.stop_price)
             if args.wait > 0 and order.get("id"):
                 order = wait_for_terminal(order["id"], args.wait)
             result: Any = order

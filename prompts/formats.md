@@ -93,7 +93,10 @@ status: running               # running | complete | failed
 - <candidate_id>: <sector>, <long|short>, potential_score <n>, risk_bucket <core|growth|speculative>
 
 ## Recommendations
-- <candidate_id>: <risk_bucket>, <entry / stop / target / horizon>   (from the technical-analysis stage)
+- <candidate_id>: <risk_bucket>, <entry / stop / targets / horizon>, pick score <n>   (at most one per bucket)
+
+## Also passed
+- <candidate_id>: <risk_bucket>, <entry / stop / targets / horizon>, pick score <n>   (passed every filter, not recommended; graded like the recommendations)
 
 ## Errors
 - <agent> <subject>: <what failed>
@@ -132,11 +135,19 @@ direction: long
 risk_bucket: growth            # from the sector deep dive; fixed for the life of the position
 opened: 2026-09-26            # the user's entry date, once known
 entry: 118.40                 # planned, then the actual price once traded
+entry_valid_until: 2026-10-09 # from the plan; an untriggered entry expires after this date
 stop: 111.00
-target: 134.00
+targets:                      # from the plan, nearest first; fractions sum to 1.0
+  - {price: 128.00, fraction: 0.5, hit: null}    # hit: the date it was hit, once it is
+  - {price: 140.00, fraction: 0.5, hit: null}
+target: 134.00                # size-weighted mean of the targets (the plan's `target`)
+remaining_fraction: 1.0       # 1.0 until a target is hit; minus each hit target's fraction
 horizon: swing
+max_hold_trading_days: 63     # from the profile for this horizon; null = no limit
+position_size_pct: 2.0        # from the bucket's profile; the intended size as % of account
+qty: null                     # shares, once sized (paper order) or reported by the user
 level_trigger: close
-status: open                  # open | closed
+status: open                  # open | closed | expired (entry never triggered)
 closed: null
 exit_price: null
 plan: workspace/agents/technical-analysis/analyses/<run_id>/XOM
@@ -145,15 +156,15 @@ last_full_review: null
 last_alert_at: null
 held_alerts: []
 broker: null                  # "alpaca_paper" once a broker order was placed for this position
-broker_entry_order_id: null   # Alpaca paper order id for the entry, if placed through /trade
-broker_exit_order_id: null    # Alpaca paper order id for the exit, if placed through /trade
+broker_entry_order_id: null   # Alpaca paper order id for the entry (placed by /decide accept or /trade)
+broker_exit_order_ids: []     # Alpaca paper order ids for the exits, one per target or a manual sell
 ---
 ```
 
 `broker*` fields are order facts (id, and the fill they produced), the same kind of thing
-as `entry`/`exit_price` — never decision text. They are set only when the user places the
-trade through `/trade ... broker-buy|broker-sell`; a manually placed or reported trade
-leaves them `null`.
+as `entry`/`exit_price` — never decision text. They are set when `/decide accept` places
+the paper entry order or the user places a trade through `/trade ... broker-buy|broker-sell`;
+a manually placed or reported trade leaves them `null`/`[]`.
 
 `positions/<position_id>/alerts.md`: one line per alert,
 `- <as_of> <delivered|held> <kind>: <detail> (run <run_id>)`.

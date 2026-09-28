@@ -51,10 +51,12 @@ project's permission allow rules; the hooks and deny rules apply either way. Eve
 (none are pre-approved in `.claude/settings.json`).
 
 **Profile.** Copy `profile.example.json` to `workspace/profile.json` and edit it:
-shorts, `level_trigger`, notes, and per-risk-bucket (`core`/`growth`/`speculative`)
-horizons, max loss, reward:risk and target return (see ARCHITECTURE.md §4, §4a). Without
-it, the example profile is used. Each run copies the profile it used into its run
-folder.
+shorts, `level_trigger`, max hold per horizon, notes, and one full risk profile per
+bucket (`core`/`growth`/`speculative`): horizons and the preferred one, entry style,
+max loss, reward:risk, target return, scale-out targets, position size (% of account,
+used to size the paper entry order) and how long an entry stays valid (see
+ARCHITECTURE.md §4, §4a, §4b). Without it, the example profile is used — note it ships
+with `allow_short: true`. Each run copies the profile it used into its run folder.
 
 **Models.** Each agent's model and effort are set in its file in `.claude/agents/`; the
 table and the reasoning are in the design doc (§11).
@@ -90,34 +92,41 @@ can be opened offline or shared as a file. One agent on its own: `/run-agent <ag
 ## 4. Workflow: decide → trade → follow up → evaluate → improve
 
 ```
-/decide <candidate_id> accept "half size"     # or: reject
+/decide <candidate_id> accept "note"          # or: reject. Accept also places the sized paper entry order
 /trade <position_id> entered 118.40           # when you bought it yourself, elsewhere
-# — or, to have the pipeline place the paper order instead:
-/trade <position_id> broker-buy 50            # market order; add a price for a limit order
-/trade <position_id> broker-status            # check a still-pending order
+/trade <position_id> broker-buy 50            # manual paper entry if /decide placed none
+/trade <position_id> broker-status            # check the working order(s)
 /follow-up                                    # one tick over open positions (schedule it)
 /trade <position_id> exited 131.10 2026-10-30 # manual exit
-/trade <position_id> broker-sell 50           # or: paper-close it
+/trade <position_id> broker-sell target:1     # paper-sell the first scale-out target's fraction
+/trade <position_id> broker-sell all          # or: paper-close the remainder
 /evaluate                                     # grade runs at least a week old
 /feedback <agent>                             # propose lessons for one agent
 /approve <agent> <proposal_id>                # or: ... reject
 ```
 
-1. **Decide.** Only recommended candidates can be decided, once each. `accept` opens a
-   watched position from the technical plan (`position_id` = `candidate_id`); you place
-   the trade yourself, or have `/trade` do it (next). `reject` is recorded and nothing is
-   watched.
+1. **Decide.** Any candidate that passed every filter can be decided, once each: the
+   report's recommendations (at most one per bucket) or its "also passed" list.
+   `accept` opens a watched position from the technical plan (`position_id` =
+   `candidate_id`) and, if the paper-account keys are set, sizes the entry from the
+   account's equity and the bucket's `position_size_pct` and places a stop-limit/limit
+   order at the plan's entry (never a market order; good till cancelled). Without keys
+   the position is watched but unsized. `reject` is recorded and nothing is watched.
 2. **Trade.** Record your actual entry and exit (`entered`/`exited`); only the prices and
-   dates reach the position file. Or have `/trade` place the order itself with
-   `broker-buy`/`broker-sell`, against your Alpaca **paper** account only — this is the
-   one command in the whole pipeline that places an order, and only runs when you type
-   it. A filled order is recorded exactly like a manual trade, plus its order id.
-3. **Follow up.** Each tick checks every open position: price against stop and target
-   (per the profile's `level_trigger`), a missed entry, and material news. A delivered
-   alert, or 14 days since the last one, triggers a full re-review (hold / adjust plan /
-   exit). Alerts for a position are held for 12 hours after the previous one and
-   delivered together afterwards. When a stop or target is hit, or a re-review says
-   exit, the output starts with **ACTION NEEDED**.
+   dates reach the position file. Or have `/trade` place an order itself with
+   `broker-buy`/`broker-sell`, against your Alpaca **paper** account only. `/decide
+   accept`, `/trade` and `/follow-up` (fills and expiry cancels) are the only commands
+   in the pipeline that touch the broker, and each runs only when you type it. A filled
+   order is recorded exactly like a manual trade, plus its order id; a scale-out exit
+   (`target:<k>`) records that target as hit and keeps the remainder open.
+3. **Follow up.** Each tick checks every open position: price against the stop and each
+   target (per the profile's `level_trigger`), a missed or **expired** entry (past the
+   plan's `entry_valid_until` — the paper order is cancelled and the position closed as
+   never opened), the horizon's **max hold**, and material news. A delivered alert, or
+   14 days since the last one, triggers a full re-review (hold / adjust plan / exit).
+   Alerts for a position are held for 12 hours after the previous one and delivered
+   together afterwards. When a stop or target is hit, or a re-review says exit, the
+   output starts with **ACTION NEEDED** and gives the exact `/trade` command.
 4. **Evaluate.** Grades each agent's past calls against what happened since: outcome
    facts, and separately the quality of its reasoning with an attribution (foreseeable
    miss, data gap, black swan, normal variance). After the agents' results, you see a
