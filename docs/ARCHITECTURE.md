@@ -23,9 +23,9 @@ retrospective feedback loop can trace where judgment broke down.
 ```mermaid
 flowchart TD
     A0["Agent 0 - Market Scanner<br/>market → sectors with upside/downside potential"]
-    A1["Agent 1 - Sector Deep Dive<br/>per sector → shortlist of ~10-30 companies"]
+    A1["Agent 1 - Sector Deep Dive<br/>per sector → shortlist of ~10-30 companies,<br/>scored + risk-bucketed (core/growth/speculative)"]
     A2["Company Deep Dive<br/>per company → worthiness, scrutinize catalysts"]
-    A3["Technical Analysis<br/>per company → chart viability, entry/exit/stop, can reject"]
+    A3["Technical Analysis<br/>per company → chart viability, entry/exit/stop,<br/>vs its risk bucket's rules, can reject"]
     MW["Middleware<br/>reports to user; user makes the real call"]
     A5["Agent 5 - Follow-Up Loop<br/>tripwires + periodic full re-review"]
     OUT["Outcomes Agent<br/>real financial results, no judgment"]
