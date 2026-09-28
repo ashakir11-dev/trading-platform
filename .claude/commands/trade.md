@@ -41,26 +41,35 @@ environment; if the script reports they're missing, stop and tell the user to se
 **`broker-buy <qty> [limit_price]` / `broker-sell <qty> [limit_price]`:**
 
 1. `workspace/positions/<position_id>/position.md` must exist and be `status: open`.
-   `broker-buy` only while `opened` is empty; `broker-sell` only after `opened` is set.
-2. side = `buy` for `broker-buy`, `sell` for `broker-sell`. Run:
+   `broker-buy` only while `opened` is empty and no `broker_entry_order_id` is working
+   (`/decide accept` normally places the entry; use this for a manual re-entry or when
+   that order was skipped); `broker-sell` only after `opened` is set. For a **short**
+   position the entry side is `sell` and the exit side is `buy`; "buy"/"sell" in the
+   mode names mean entry/exit.
+   `<qty>` may be `all` (the position's remaining `qty × remaining_fraction`) or
+   `target:<k>` (the k-th target's `fraction × qty`, for a scale-out exit).
+2. side = the entry side for `broker-buy`, the exit side for `broker-sell`. Run:
    `python3 scripts/broker_alpaca.py submit --symbol <ticker> --side <side> --qty <qty>
    --wait 30` (add `--type limit --limit-price <limit_price>` if a limit price was
    given). Show the user the raw JSON result.
 3. If the order's `status` is `filled`: treat it exactly like the manual case above
    (`entered`/`exited`, using `filled_avg_price` as the price and today, New York time,
    as the date unless the fill has its own date), and additionally set `broker:
-   alpaca_paper` and `broker_entry_order_id` or `broker_exit_order_id` = the order's
-   `id` on the position file.
+   alpaca_paper` and `broker_entry_order_id` (entry) or append to `broker_exit_order_ids`
+   (exit) on the position file. A partial (scale-out) exit: mark that target's `hit`
+   date, subtract its `fraction` from `remaining_fraction`, keep `status: open`; the
+   position closes (`status: closed`, `exit_price` = the size-weighted average of all
+   exits) when `remaining_fraction` reaches 0 or a stop exit is recorded.
 4. If it is not yet filled (e.g. a limit order still `new`/`accepted`), do **not** touch
-   `opened`/`entry`/`status`/`exit_price` — only record the order id
-   (`broker_entry_order_id` or `broker_exit_order_id`) and `broker: alpaca_paper` on the
-   position, and tell the user to check back with `broker-status`.
+   `opened`/`entry`/`status`/`exit_price` — only record the order id and `broker:
+   alpaca_paper` on the position, and tell the user to check back with `broker-status`.
 5. Append the same trade-log row as the manual case once (and only once) a fill is
-   recorded, noting the broker order id.
+   recorded, noting the broker order id and, for a scale-out, the target index.
 
-**`broker-status`:** read the pending order id off the position file and run
-`python3 scripts/broker_alpaca.py status <order_id>`. If it has since filled, apply
-step 3 above; otherwise just show the current status.
+**`broker-status`:** read the working order ids off the position file
+(`broker_entry_order_id`, then any `broker_exit_order_ids` not yet recorded as filled)
+and run `python3 scripts/broker_alpaca.py status <order_id>` for each. If one has since
+filled, apply step 3 above; otherwise just show the current status.
 
 Never run `broker_alpaca.py cancel`, `positions` or `account` from here unless the user
 explicitly asks for that check.

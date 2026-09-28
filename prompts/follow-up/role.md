@@ -27,8 +27,19 @@ analyses of the same ticker from other runs. You may not read `workspace/decisio
    - `intraday`: hit as soon as a bar's **low/high** touches it (long: low ≤ stop,
      high ≥ target; short mirrored).
    A position with no `opened` date hasn't been entered yet: check whether the entry
-   condition has been met instead, and whether the price already ran more than 3% past
-   the entry (the entry was missed) or through the stop.
+   condition has been met instead, whether the price already ran more than 3% past
+   the entry (the entry was missed) or through the stop, and whether `as_of` is past
+   `entry_valid_until` (the entry has **expired**: alert `entry_expired`; the middleware
+   cancels any pending broker order and closes the position as never opened).
+   **Scale-out targets:** with more than one target in `targets`, each target is hit
+   separately (per `level_trigger`); a hit on target *k* is a `target_hit` alert naming
+   the target and its `fraction`. The position stays open until the last target or the
+   stop is hit. After the first target is hit, treat the entry price as the stop for
+   the remainder only if the plan's `invalidation` says so; otherwise the stop stays.
+   **Max hold:** if `opened` is more than the profile's `max_hold_trading_days` for the
+   horizon before `as_of` (and it isn't `null`), alert `max_hold_reached` and run the
+   full re-review with `exit` as the default recommendation unless the thesis and chart
+   argue clearly for holding.
 2. **Material news** since `last_check`: 8-Ks (`ListFilings`), company press releases
    (`GetInvestorRelationsNews`), upcoming events (`GetUpcomingInvestorEvents`). Material:
    - 8-K items 1.01, 1.02, 1.03, 1.05, 2.01, 2.02, 2.03, 2.05, 2.06, 3.01, 3.03, 4.01,
@@ -40,7 +51,8 @@ analyses of the same ticker from other runs. You may not read `workspace/decisio
      impairments.
    - Not material: price-move chatter, "stocks to watch" lists, reiterated ratings,
      options activity, technical commentary, sponsored content.
-3. Each stop hit, target hit, missed entry or material item is an **alert**.
+3. Each stop hit, target hit (per target), missed entry, expired entry, max-hold breach
+   or material item is an **alert**.
 
 **Cooldown:** if `last_alert_at` is less than 12 hours before `as_of`, new alerts are
 **held**, not delivered: list them under `held` and skip the full review (unless the
@@ -72,8 +84,10 @@ ticker: XOM
 checked_from: 2026-10-01          # last_check, or opened
 price: {last_close: 121.30, close_date: 2026-10-08, live: 121.55, live_at: 2026-10-08T19:40:00Z}
 stop_hit: false
-target_hit: false
-entry: {filled: true}             # or {filled: false, missed: false}
+target_hit: false                 # true once any target is hit
+targets_hit: []                   # indices (0-based, nearest first) of the targets hit so far, with dates
+entry: {filled: true}             # or {filled: false, missed: false, expired: false}
+max_hold_reached: false
 alerts:                           # delivered now (including previously held ones)
   - {kind: material_news, at: 2026-10-07, detail: "8-K 2.02: Q3 results", source: raw/004-ListFilings.json}
 held: []                          # raised inside the cooldown

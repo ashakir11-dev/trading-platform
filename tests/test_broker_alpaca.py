@@ -87,6 +87,31 @@ def test_limit_order_includes_price():
     assert captured["body"]["limit_price"] == "120.50"
 
 
+def test_stop_limit_order_needs_both_prices_and_sends_them():
+    with pytest.raises(broker.BrokerError):
+        broker.submit_order("XOM", "buy", "10", order_type="stop_limit", limit_price="120.60")
+    with pytest.raises(broker.BrokerError):
+        broker.submit_order("XOM", "buy", "10", order_type="stop_limit", stop_price="120.00")
+    captured = {}
+
+    def fake_urlopen(req, timeout=15):
+        captured["body"] = json.loads(req.data)
+        return FakeResponse({"id": "order-3"})
+
+    with patch("urllib.request.urlopen", side_effect=fake_urlopen):
+        broker.submit_order("XOM", "buy", "10", order_type="stop_limit", time_in_force="gtc",
+                            limit_price="120.60", stop_price="120.00")
+    assert captured["body"]["type"] == "stop_limit"
+    assert captured["body"]["stop_price"] == "120.00"
+    assert captured["body"]["limit_price"] == "120.60"
+    assert captured["body"]["time_in_force"] == "gtc"
+
+
+def test_unknown_order_type_rejected():
+    with pytest.raises(broker.BrokerError):
+        broker.submit_order("XOM", "buy", "10", order_type="trailing_stop")
+
+
 def test_http_error_wrapped_as_broker_error():
     def fake_urlopen(req, timeout=15):
         raise urllib.error.HTTPError(req.full_url, 403, "forbidden", {}, None)

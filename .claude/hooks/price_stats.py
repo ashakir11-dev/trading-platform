@@ -72,6 +72,57 @@ def atr(bars: list[Bar], n: int = 14) -> float | None:
     return value
 
 
+def rsi(bars: list[Bar], n: int = 14) -> float | None:
+    """Wilder's RSI on closes."""
+    if len(bars) < n + 1:
+        return None
+    changes = [b.close - p.close for p, b in zip(bars, bars[1:])]
+    gain = sum(c for c in changes[:n] if c > 0) / n
+    loss = sum(-c for c in changes[:n] if c < 0) / n
+    for c in changes[n:]:
+        gain = (gain * (n - 1) + max(c, 0.0)) / n
+        loss = (loss * (n - 1) + max(-c, 0.0)) / n
+    if loss == 0:
+        return 100.0
+    return 100.0 - 100.0 / (1.0 + gain / loss)
+
+
+def _ema(values: list[float], n: int) -> list[float]:
+    k = 2.0 / (n + 1)
+    out = [sum(values[:n]) / n]
+    for v in values[n:]:
+        out.append(out[-1] + k * (v - out[-1]))
+    return out
+
+
+def macd(bars: list[Bar], fast: int = 12, slow: int = 26, signal: int = 9) -> tuple[float, float, float] | None:
+    """(MACD line, signal line, histogram) from EMAs of the closes; None when too few bars."""
+    closes = [b.close for b in bars]
+    if len(closes) < slow + signal:
+        return None
+    fast_e, slow_e = _ema(closes, fast), _ema(closes, slow)
+    line = [f - s for f, s in zip(fast_e[slow - fast:], slow_e)]
+    sig = _ema(line, signal)
+    return line[-1], sig[-1], line[-1] - sig[-1]
+
+
+def vwap(bars: list[Bar], n: int = 20) -> float | None:
+    """Volume-weighted average of the typical price over the last n bars."""
+    window = bars[-n:]
+    vol = sum(b.volume for b in window)
+    if len(window) < n or vol == 0:
+        return None
+    return sum((b.high + b.low + b.close) / 3 * b.volume for b in window) / vol
+
+
+def relative_volume(bars: list[Bar], n: int = 20) -> float | None:
+    """Last bar's volume over the mean volume of the n bars before it."""
+    if len(bars) < n + 1:
+        return None
+    base = sum(b.volume for b in bars[-n - 1:-1]) / n
+    return None if base == 0 else bars[-1].volume / base
+
+
 def pivots(bars: list[Bar], k: int = 5, keep: int = 6) -> tuple[list[Bar], list[Bar]]:
     """Swing highs/lows: a bar whose high (low) is the extreme of the k bars on each side."""
     highs, lows = [], []
@@ -144,6 +195,14 @@ def summary(text: str, *, raw_file: str, with_levels: bool = False) -> str:
     lines.append(
         (f"ATR14 {_f(a)} ({a / last.close * 100:.2f}% of the last close). " if a is not None else "ATR14 n/a. ")
         + f"Average daily dollar volume, last {len(recent)} bars: ${dollar / 1e6:,.1f}M.")
+    r, m, v, rv = rsi(bars), macd(bars), vwap(bars), relative_volume(bars)
+    lines.append("Indicators: "
+                 + (f"RSI14 {r:.1f}" if r is not None else "RSI14 n/a")
+                 + (f"; MACD(12,26,9) line {m[0]:,.2f}, signal {m[1]:,.2f}, histogram {m[2]:+,.2f}"
+                    if m is not None else "; MACD n/a")
+                 + (f"; VWAP20 {_f(v)} (close {_pct(last.close, v):+.2f}% vs it)" if v is not None else "; VWAP20 n/a")
+                 + (f"; relative volume {rv:.2f}x (last bar vs its 20-bar average)" if rv is not None
+                    else "; relative volume n/a") + ".")
     if with_levels:
         highs, lows = pivots(bars)
         lines.append("Swing highs (5 bars each side), most recent last: "

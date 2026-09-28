@@ -20,6 +20,7 @@ sequenceDiagram
     participant A3 as technical-analysis (×M)
     participant EQ as Equibles MCP
     participant WS as workspace/
+    participant BR as Alpaca paper (broker_alpaca.py)
 
     User->>MW: /run [--max-sectors N] [--shortlist N]
     MW->>WS: run.md, profile.json (copy)
@@ -45,15 +46,16 @@ sequenceDiagram
     end
     par one per candidate that passed
         MW->>A3: brief (ticker, risk_bucket, upstream = company, profile)
-        A3->>EQ: prices (statistics + levels), quote, earnings
-        Note over A3: rules checked against profile.buckets[risk_bucket]
+        A3->>EQ: prices + SPY (statistics, indicators, levels), quote, earnings
+        Note over A3: plan in the bucket's profile: horizon, entry style,<br/>scale-out targets, entry deadline; rules checked against it
         A3->>WS: output.md (plan + rule results, risk_bucket unchanged)
     end
-    Note over MW: recompute price order, max loss,<br/>reward:risk against the candidate's bucket;<br/>a mismatch blocks it
-    MW->>WS: report.md
+    Note over MW: recompute every plan against its bucket (mismatch blocks);<br/>pick score = company × technical confidence;<br/>≤1 recommendation per bucket, the rest "also passed"
+    MW->>WS: report.md, report.json → report.html (charts from raw/)
     MW-->>User: report
     User->>MW: /decide <candidate_id> accept|reject
     MW->>WS: decisions/<id>.md (middleware only);<br/>positions/<id>/position.md on accept
+    MW->>BR: accept: sized stop-limit/limit entry at the plan's entry (paper, GTC)
 ```
 
 ## 2. Follow-up, evaluation and feedback
@@ -72,12 +74,13 @@ sequenceDiagram
     par one per open position
         MW->>A5: brief (position, last check, cooldown state)
         A5->>WS: read position, plan, earlier analyses
-        Note over A5: tripwires: stop/target, missed entry,<br/>material news; 12h cooldown;<br/>full re-review on alert or every 14 days,<br/>a new plan checked against the position's risk_bucket
+        Note over A5: tripwires: stop / each target, missed or expired entry,<br/>max hold, material news; 12h cooldown;<br/>full re-review on alert or every 14 days,<br/>a new plan checked against the position's bucket profile
         A5->>WS: output.md
     end
     MW->>WS: position state, alerts.md
+    Note over MW: paper bookkeeping: record an entry fill;<br/>cancel the entry order on expiry
     MW-->>User: alerts, ACTION NEEDED when a level is hit or exit advised
-    User->>MW: /trade <id> exited <price>
+    User->>MW: /trade <id> exited <price>  (or broker-sell target:<k> / all)
     User->>MW: /evaluate
     par one per (run, agent)
         MW->>EV: brief (agent, run, eval date)

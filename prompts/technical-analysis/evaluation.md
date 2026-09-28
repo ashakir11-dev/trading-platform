@@ -2,7 +2,16 @@
 
 Read `prompts/evaluation.md` first.
 
-**Subjects:** each candidate analysed in the run, passed or rejected.
+**Subjects:** each candidate analysed in the run, passed or rejected — including the
+eligible candidates the middleware listed under "Also passed" (they are graded exactly
+like the recommendations; the comparison between the two groups is what tests the
+pick rule, so add `picked: true|false` per subject from `run.md`).
+
+**Scale-out plans:** with several `targets`, "target first" means the *first* target;
+also record which targets were hit in order, the size-weighted realised return using
+the fractions (unhit remainder marked at the exit or the mark), and whether the later
+targets were ever reached. An entry that never triggered before `entry_valid_until`
+is "expired", `worked: null`, and counts as not filled.
 
 **Outcome facts** from `as_of` to `eval_as_of`, from daily bars, per the profile's
 `level_trigger` (`close`: closes decide; `intraday`: lows/highs decide):
@@ -22,9 +31,11 @@ Read `prompts/evaluation.md` first.
 - For positions the user actually entered, use the actual entry from the position file
   alongside the planned one (trade facts only).
 
-**Summary metrics:** `plans`, `filled`, `target_first`, `stop_first`, `open`,
+**Summary metrics:** `plans`, `filled`, `expired`, `target_first`, `stop_first`, `open`,
 `avg_realised_rr`, `rejected_that_ran` (rejected setups that rose more than the plan's
-would-be target distance, if a plan was sketched).
+would-be target distance, if a plan was sketched), and `picked_vs_also_passed`: mean
+direction-adjusted return of the picked candidates minus the "also passed" ones (the
+pick rule is doing its job when this is positive).
 
 **Reasoning:** were the stop and target at levels the chart justified (swing points,
 ATR) or placed to fit the rules? Was event risk (earnings) weighed? Was a plan sitting

@@ -95,20 +95,32 @@ parallel. Subject: the ticker. Upstream: the company deep dive's folder. Profile
 run's `profile.json`. Task: `Candidate <candidate_id>: <TICKER>, <long|short>,
 risk_bucket <core|growth|speculative>.`
 
-**Recommendation check.** Read the technical frontmatter. The candidate is recommended
+**Recommendation check.** Read the technical frontmatter. The candidate is eligible
 only if `verdict: pass`, a `plan` is present and no rule has `outcome: reject`. Before
-listing it, look up the candidate's `risk_bucket` in the profile's `buckets` map and
+going further, look up the candidate's `risk_bucket` in the profile's `buckets` map and
 recompute from the plan's numbers and that bucket's limits:
 
-- price order: long s < e < t, short t < e < s;
+- price order: long s < e < every target price, short every target price < e < s;
+- targets: 1 ≤ count ≤ the bucket's `max_targets`, fractions sum to 1.0 (±0.01), and
+  `target` = Σ price × fraction (±0.01);
 - max loss: |e − s| / e × 100 ≤ the bucket's `max_loss_per_trade_pct`;
-- reward:risk: |t − e| / |e − s| ≥ the bucket's `min_reward_to_risk`.
+- reward:risk: |t − e| / |e − s| ≥ the bucket's `min_reward_to_risk`, with `t` the
+  size-weighted `target`.
 
-If your numbers disagree with the agent's rule results, do not recommend: record the
-candidate under "Not pursued" as `rule check mismatch: <rule>, agent <x>, recomputed <y>`.
-Otherwise list it under "Recommendations" with entry / stop / target / horizon and
-every `flag`. Rejected candidates go under "Not pursued" with the failing rule or the
-agent's reason.
+If your numbers disagree with the agent's rule results, the candidate is not eligible:
+record it under "Not pursued" as `rule check mismatch: <rule>, agent <x>, recomputed <y>`.
+Rejected candidates go under "Not pursued" with the failing rule or the agent's reason.
+
+**Picking the recommendations (at most one per bucket).** Among the eligible candidates
+of each `risk_bucket`, compute a `pick score` = company-deep-dive `confidence` ×
+technical-analysis `confidence`, tiebreak on the sector deep dive's `potential_score`,
+then on reward:risk. The highest pick score in each bucket is the bucket's
+**recommendation**; a bucket with no eligible candidate gets none. List it under
+"Recommendations" with entry / stop / targets / horizon, the pick score and every
+`flag`. Every other eligible candidate goes under **"Also passed"** with the same
+fields: they are shown in the report, not recommended, and the evaluator grades them
+exactly like the recommendations (they are the shadow ledger that tests the pick rule).
+You never re-rank on your own judgment: the score decides, and the report says so.
 
 ## Finishing
 
