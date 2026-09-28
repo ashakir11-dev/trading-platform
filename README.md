@@ -69,11 +69,14 @@ decisions) and [`docs/prompt-subagents-design.md`](docs/prompt-subagents-design.
 
 ## Investor profile
 
-The pipeline works for a specific investor. The profile sets risk tolerance, allowed
-horizons, whether shorts are allowed, maximum loss per trade, minimum reward:risk, target
-return, whether a stop/target counts as hit on the close or intraday (`level_trigger`),
-and free-text preferences. The technical agent plans around it and applies its rules;
-the middleware re-checks the numbers.
+The pipeline works for a specific investor. The profile sets what's shared across every
+trade (whether shorts are allowed, whether a stop/target counts as hit on the close or
+intraday — `level_trigger` — and free-text preferences), plus, **per risk bucket**
+(`core`/`growth`/`speculative` — the reward shape the sector deep dive assigns each
+company alongside its conviction score): allowed horizons, maximum loss per trade,
+minimum reward:risk and target return. The technical agent plans around its
+candidate's bucket and applies that bucket's rules; the middleware re-checks the
+numbers against the same bucket.
 
 Copy [`profile.example.json`](profile.example.json) to `workspace/profile.json` and edit
 it; without one, the example is used.
@@ -81,14 +84,14 @@ it; without one, the example is used.
 ```json
 {
   "name": "example",
-  "risk_tolerance": "moderate",
-  "horizons": ["swing", "long_term"],
   "allow_short": false,
-  "max_loss_per_trade_pct": 8.0,
-  "min_reward_to_risk": 2.0,
-  "target_return_pct": 15.0,
   "level_trigger": "close",
-  "notes": "Avoid tobacco and weapons. Prefer companies with positive free cash flow."
+  "notes": "Avoid tobacco and weapons. Prefer companies with positive free cash flow.",
+  "buckets": {
+    "core": {"horizons": ["swing", "long_term"], "max_loss_per_trade_pct": 5.0, "min_reward_to_risk": 1.5, "target_return_pct": 8.0},
+    "growth": {"horizons": ["swing", "long_term"], "max_loss_per_trade_pct": 8.0, "min_reward_to_risk": 2.0, "target_return_pct": 15.0},
+    "speculative": {"horizons": ["swing"], "max_loss_per_trade_pct": 15.0, "min_reward_to_risk": 3.0, "target_return_pct": 30.0}
+  }
 }
 ```
 

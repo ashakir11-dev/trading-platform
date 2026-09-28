@@ -90,10 +90,10 @@ status: running               # running | complete | failed
 - <ticker>: <duplicate | direction_conflict>: first <sector, direction>, also <sector, direction>
 
 ## Forwarded
-- <candidate_id>: <sector>, <long|short>, potential_score <n>
+- <candidate_id>: <sector>, <long|short>, potential_score <n>, risk_bucket <core|growth|speculative>
 
 ## Recommendations
-- <candidate_id>: <entry / stop / target / horizon>   (from the technical-analysis stage)
+- <candidate_id>: <risk_bucket>, <entry / stop / target / horizon>   (from the technical-analysis stage)
 
 ## Errors
 - <agent> <subject>: <what failed>
@@ -129,6 +129,7 @@ Trade facts only: no decision text, notes or reasoning of the user.
 position_id: 20260925T213314Z-XOM
 ticker: XOM
 direction: long
+risk_bucket: growth            # from the sector deep dive; fixed for the life of the position
 opened: 2026-09-26            # the user's entry date, once known
 entry: 118.40                 # planned, then the actual price once traded
 stop: 111.00

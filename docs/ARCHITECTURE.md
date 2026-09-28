@@ -23,9 +23,9 @@ retrospective feedback loop can trace where judgment broke down.
 ```mermaid
 flowchart TD
     A0["Agent 0 - Market Scanner<br/>market → sectors with upside/downside potential"]
-    A1["Agent 1 - Sector Deep Dive<br/>per sector → shortlist of ~10-30 companies"]
+    A1["Agent 1 - Sector Deep Dive<br/>per sector → shortlist of ~10-30 companies,<br/>scored + risk-bucketed (core/growth/speculative)"]
     A2["Company Deep Dive<br/>per company → worthiness, scrutinize catalysts"]
-    A3["Technical Analysis<br/>per company → chart viability, entry/exit/stop, can reject"]
+    A3["Technical Analysis<br/>per company → chart viability, entry/exit/stop,<br/>vs its risk bucket's rules, can reject"]
     MW["Middleware<br/>reports to user; user makes the real call"]
     A5["Agent 5 - Follow-Up Loop<br/>tripwires + periodic full re-review"]
     OUT["Outcomes Agent<br/>real financial results, no judgment"]
@@ -50,7 +50,7 @@ Step-by-step runtime flow (sequence diagrams): [`sequence-diagrams.md`](sequence
 | Stage | Agent (prompts in `prompts/<agent>/`) | Runs | Input | Output |
 |---|---|---|---|---|
 | Agent 0: Market Scanner | `market-scanner` | once per run | sector ETF performance + macro data | sectors with upside/downside potential |
-| Agent 1: Sector Deep Dive | `sector-deep-dive` | one per sector, in parallel | sector call + **bulk screen of the sector's companies** (ratios, size, prices, recent filings/events) + breadth, FDA, earnings | shortlist **ranked by potential score** |
+| Agent 1: Sector Deep Dive | `sector-deep-dive` | one per sector, in parallel | sector call + **bulk screen of the sector's companies** (ratios, size, prices, recent filings/events) + breadth, FDA, earnings | shortlist **ranked by potential score**, each with a **risk bucket** (§4a) |
 | Company Deep Dive | `company-deep-dive` | one per company, in parallel | shortlist entry + market/sector/macro data + **full company data** (fundamentals, filings, guidance, estimates, transcripts, insider and short data) | worthiness verdict; catalysts checked |
 | Technical Analysis | `technical-analysis` | one per company, in parallel, **no cross-comparison** | candidate + **investor profile** + price statistics, swing levels and weekly bars for the horizon's charts + earnings date | chart verdict + entry / stop / target / horizon / chart timeframe, or rejection; then the **profile's rules** |
 | Middleware | the commands in `.claude/commands/` | orchestrates | | report to the user; records the user's decisions |
@@ -91,13 +91,47 @@ Step-by-step runtime flow (sequence diagrams): [`sequence-diagrams.md`](sequence
 
 ## 4. Investor profile, horizons and rules
 
-**Investor profile** (`workspace/profile.json`, example in `profile.example.json`): who the pipeline works for, including risk tolerance, allowed
-holding horizons, whether shorts are allowed, maximum loss per trade, minimum
-reward:risk, target return, how stop/target hits are detected (`level_trigger`), and
-free-text notes. It is the user's *preferences*, set up
-front, not a decision, so showing it to agents does not break the one-way middleware
-principle. The technical agent and Agent 5's full review read it, and the rules
-enforce it.
+**Investor profile** (`workspace/profile.json`, example in `profile.example.json`): who the pipeline works for. It holds settings shared across every
+trade (whether shorts are allowed, how stop/target hits are detected — `level_trigger`
+— and free-text notes) plus a **`buckets` map**: one set of holding horizons, maximum
+loss per trade, minimum reward:risk and target return **per risk bucket** (§4a). It is
+the user's *preferences*, set up front, not a decision, so showing it to agents does not
+break the one-way middleware principle. The technical agent and Agent 5's full review
+read it, and the rules enforce it.
+
+### 4a. Risk buckets
+
+Agent 1 (sector deep dive) assigns every company it passes a **`risk_bucket`** —
+`core`, `growth` or `speculative` — alongside its `potential_score`. This is a second,
+independent axis: `potential_score` is *conviction* (how likely the thesis plays out);
+`risk_bucket` is *reward shape* (how large a move the thesis implies if it does).
+Combining them into one 0-100 score would hide that a high-conviction, small-catalyst
+company and a low-conviction, binary-catalyst company are different kinds of trade, not
+different points on the same ladder. A company with neither a real case nor a
+meaningful catalyst doesn't get a bucket at all — it's `passed: false`, same as today.
+
+- **Assigned once, at Agent 1, and never re-scored downstream.** Company deep dive and
+  technical analysis do not change it. This keeps one company mapped to exactly one
+  candidate; letting later stages re-bucket (or bucketing the same ticker multiple ways)
+  would fork a candidate into several plans and multiply the conflict-tracking below.
+- **Magnitude comes from the catalyst, not the chart.** The bucket is set from the
+  *type and size of the catalyst* Agent 1 found (a binary regulatory or M&A event
+  implies a bigger move than a dividend hike or a routine estimate beat), never from
+  price volatility (ATR, historical range). Volatility is a **technical** signal; using
+  it at Agent 1 would blur principle 3 (fundamental and technical are independent
+  filters) by letting a chart-shaped judgment leak into the fundamental screen.
+- **The bucket selects a profile, not a plan.** Technical analysis still derives entry,
+  stop and target from chart structure alone — a bucket never dictates a literal stop
+  distance a chart doesn't support. What the bucket picks is *which* limits from
+  `profile.json`'s `buckets` map apply (`max_loss_per_trade_pct`, `min_reward_to_risk`,
+  allowed `horizons`, `target_return_pct`) when the technical agent checks its plan
+  against the rules. A `core` company that can't produce a plan inside the `core`
+  bucket's tighter limits is rejected, same as any other rule failure — its levels are
+  never loosened to fit.
+- **Carried through, not recomputed.** The bucket travels with the candidate from the
+  "Forwarded" list through company deep dive (unused there, kept for the record) to
+  technical analysis, and into the position file, so follow-up's full re-review checks
+  a new plan against the same bucket's limits.
 
 **Horizons and chart timeframes.** Each horizon has its own charts; the technical
 agent reads levels from the primary chart and trend from the context chart, and
@@ -112,16 +146,18 @@ Day trading is **not** supported: it conflicts with principle 7 (intraday data g
 stale while the pipeline runs). Adding it would need a decision to change that principle.
 
 **Rules** (`prompts/technical-analysis/role.md`). Rules never make judgment calls: they
-catch mechanical errors, enforce the profile and flag known risks. The technical agent
-applies every rule to its own plan and records each result with its numbers, and the
-middleware recomputes price order, max loss and reward:risk before recommending (a
-mismatch blocks the recommendation). The evaluator can therefore tell a rule veto from
-a judgment failure. `reject` removes the candidate; `flag` warns the user in the report.
+catch mechanical errors, enforce the profile's **bucket** and flag known risks. The
+technical agent applies every rule to its own plan, against the limits of the
+candidate's `risk_bucket`, and records each result with its numbers; the middleware
+recomputes price order, max loss and reward:risk against the same bucket before
+recommending (a mismatch blocks the recommendation). The evaluator can therefore tell a
+rule veto from a judgment failure. `reject` removes the candidate; `flag` warns the user
+in the report.
 
 | Rule | Outcome | When |
 |---|---|---|
 | `plan_price_order` | reject | long needs stop < entry < target; short the reverse |
-| `profile_horizon` | reject | plan horizon not in the profile's horizons |
+| `profile_horizon` | reject | plan horizon not in the candidate's bucket's horizons |
 | `chart_timeframe` | flag | plan levels not read from the horizon's primary chart |
 | `profile_short` | reject | short plan when shorts are not allowed; downside sector calls are then not pursued |
 | `max_loss` | reject | stop further from entry than `max_loss_per_trade_pct` |
@@ -181,6 +217,7 @@ recorded and delivered with the next alert, so nothing material is lost.
 
 | Decision | Choice | Why |
 |---|---|---|
+| Risk buckets (§4a) | Agent 1 assigns each passing company a `risk_bucket` (`core`/`growth`/`speculative`) from conviction × catalyst-type magnitude, alongside `potential_score`; `profile.json` becomes a `buckets` map of per-bucket limits; technical analysis applies the candidate's bucket's limits. Assigned once at Agent 1, never re-scored downstream; magnitude comes from catalyst type, never chart volatility. | A single 0-100 score conflated conviction with reward shape ("safe and likely" vs. "risky but big" are different trade types, not different ranks). Fixing the bucket at Agent 1 keeps one company mapped to one candidate and keeps the fundamental/technical filters independent (principle 3). |
 | Broker paper trading | **Added, scoped to forward testing.** `scripts/broker_alpaca.py` places and checks orders against Alpaca's paper-trading endpoint only (hard-coded, no live-account path). It is a plain script, not an MCP tool or subagent capability: no agent definition lists it, so no stage/follow-up/evaluator agent can call it, and `.claude/hooks/workspace_guard.py` denies any subagent `Bash` call naming it as defense in depth. Only the middleware agent runs it, and only from `/trade`'s new `broker-buy`/`broker-sell`/`broker-status` modes, triggered solely by the user typing that command. A filled order is recorded exactly like a manually-reported trade (`entered`/`exited` on `position.md`), plus the order id (`broker_entry_order_id`/`broker_exit_order_id`, `prompts/formats.md`). | Relaxes the no-orders rule enough for forward testing without weakening the one-way middleware principle or the decisions firewall: execution still requires the user's explicit `/trade` command, and no agent gains a path to place or influence an order. |
 | Alpaca MCP server | **Added, for interactive/manual use, not the pipeline.** `.mcp.json` adds the community `alpaca-mcp-server` (orders, positions, account, watchlists), with `ALPACA_PAPER_TRADE` pinned to the literal `"true"` in the checked-in config (not read from the environment), so flipping it to live trading requires a reviewed change to `.mcp.json` itself. No `.claude/agents/*.md` lists any `mcp__alpaca__*` tool, and `workspace_guard.py` denies the whole prefix to any subagent (`agent_id` set) as defense in depth — it is never a data source for an agent either (Equibles stays the only one). Only you, and the middleware agent if a command is later written to use it, can call it. | You wanted the full toolset (not just order submit/status) for hands-on testing against the real paper account; keeping it out of every subagent's tools and pinning paper mode in the repo (rather than trusting an env var) keeps the no-agent-execution guarantee and the paper-only guarantee both intact. |
 

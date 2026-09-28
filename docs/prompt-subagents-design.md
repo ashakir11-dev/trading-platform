@@ -206,7 +206,7 @@ What you'd do differently (optional).
 | Agent | Graded on |
 |---|---|
 | market-scanner | Did the sectors it called up/down move that way relative to SPY over the horizon? |
-| sector-deep-dive | Did higher `potential_score` companies do better, **including the ones not forwarded**? |
+| sector-deep-dive | Did higher `potential_score` companies do better, **including the ones not forwarded**? Did `risk_bucket` track real magnitude of outcome (§4a)? |
 | company-deep-dive | Did the catalysts it checked materialise? Were risks that later hit listed? |
 | technical-analysis | Stop or target first (per `level_trigger`), reward:risk realised, entries never filled. |
 | follow-up | Were alerts material and timely? Did exit/adjust calls help? |
@@ -316,7 +316,7 @@ and, like the script, outside every agent's tool list and blocked for subagents 
 | D0 | Evaluation writes "agent vs market" (feedback reads it) and "agent vs your trade" (middleware agent, `decisions/reviews/`, shown to you only; never a lesson). |
 | D1 | Backtests run through a gatekeeper agent (fetch + point-in-time filter) and an independent auditor agent; stage agents get no Equibles tools in backtests (§10). |
 | D2 | `CLAUDE.md` hard rules reworded for this design (tool allowlists in subagent definitions; `as_of` enforced by prompt and checked from `raw/`). |
-| D3 | Rules and outcome arithmetic move into prompts. The technical-analysis agent reads the investor profile (`workspace/profile.json`, else `profile.example.json`; copied into each run) and applies the rules; follow-up and evaluators read it for `level_trigger`. |
+| D3 | Rules and outcome arithmetic move into prompts. The technical-analysis agent reads the investor profile (`workspace/profile.json`, else `profile.example.json`; copied into each run) and applies the candidate's `risk_bucket`'s rules (§4a); follow-up and evaluators read it for `level_trigger` and the bucket's rules. |
 | D4 | Agentic only for now. No side-by-side run with the Python pipeline. |
 | D5 | Call budgets and per-agent models are not considered for now. |
 

@@ -50,10 +50,11 @@ project's permission allow rules; the hooks and deny rules apply either way. Eve
 `alpaca` MCP tool call still prompts for your approval unless you allow-list it yourself
 (none are pre-approved in `.claude/settings.json`).
 
-**Profile.** Copy `profile.example.json` to `workspace/profile.json` and edit it: risk
-tolerance, horizons, shorts, max loss, reward:risk, `level_trigger`, notes (see
-ARCHITECTURE.md §4). Without it, the example profile is used. Each run copies the
-profile it used into its run folder.
+**Profile.** Copy `profile.example.json` to `workspace/profile.json` and edit it:
+shorts, `level_trigger`, notes, and per-risk-bucket (`core`/`growth`/`speculative`)
+horizons, max loss, reward:risk and target return (see ARCHITECTURE.md §4, §4a). Without
+it, the example profile is used. Each run copies the profile it used into its run
+folder.
 
 **Models.** Each agent's model and effort are set in its file in `.claude/agents/`; the
 table and the reasoning are in the design doc (§11).

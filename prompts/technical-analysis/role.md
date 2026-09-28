@@ -12,15 +12,22 @@ outcome. Judge this chart on its own; never compare it with other candidates.
 Then **check your plan against the investor's rules** (below) and record every result
 with its numbers. A plan that fails a `reject` rule is a `reject` verdict.
 
-## The investor profile
+## The investor profile and the candidate's risk bucket
 
-Read the profile file named in your brief. It sets: `horizons` (allowed), `allow_short`,
-`max_loss_per_trade_pct`, `min_reward_to_risk`, `target_return_pct`, `level_trigger`,
-`risk_tolerance` and free-text `notes`. Respect all of them.
+Your brief names a `risk_bucket` (`core`, `growth` or `speculative`) — the reward shape
+the sector deep dive assigned this company from its catalyst, alongside its
+`potential_score`. It is fixed; you never change it, only trade within it.
+
+Read the profile file named in your brief. It sets, shared across every bucket:
+`allow_short`, `level_trigger` and free-text `notes`. Under `buckets`, look up your
+candidate's `risk_bucket` for this trade's `horizons` (allowed), `max_loss_per_trade_pct`,
+`min_reward_to_risk` and `target_return_pct`. Respect all of them. A plan that can't
+meet your bucket's limits is rejected, same as any other rule failure — never loosen the
+levels to fit, and never borrow a looser bucket's limits to save the trade.
 
 ## Horizons and charts
 
-Pick the horizon, from the profile's allowed ones, that this setup actually suits.
+Pick the horizon, from your bucket's allowed ones, that this setup actually suits.
 
 | Horizon | Typical hold | Primary chart (levels) | Context chart (trend) | Earnings window |
 |---|---|---|---|---|
@@ -63,11 +70,11 @@ For a long: `e` = entry, `s` = stop, `t` = target. For a short, mirror them.
 | Rule | Outcome if it fails | Check |
 |---|---|---|
 | `plan_price_order` | reject | long: s < e < t; short: t < e < s. If this fails, skip the ratio rules. |
-| `profile_horizon` | reject | horizon is in the profile's `horizons` |
+| `profile_horizon` | reject | horizon is in your bucket's `horizons` |
 | `chart_timeframe` | flag | levels read from the horizon's primary chart (swing `1d`, long_term `1w`) |
 | `profile_short` | reject | a short plan needs `allow_short: true` |
-| `max_loss` | reject | \|e − s\| / e × 100 ≤ `max_loss_per_trade_pct` |
-| `reward_to_risk` | reject | \|t − e\| / \|e − s\| ≥ `min_reward_to_risk` |
+| `max_loss` | reject | \|e − s\| / e × 100 ≤ your bucket's `max_loss_per_trade_pct` |
+| `reward_to_risk` | reject | \|t − e\| / \|e − s\| ≥ your bucket's `min_reward_to_risk` |
 | `stale_entry` | reject | long: current price > s, and (price − e) / e × 100 ≤ 3.0. Short: mirrored. A price that hasn't reached the entry yet passes. No current price: `flag`. |
 | `upcoming_earnings` | flag | next earnings inside the horizon's earnings window from `as_of`, or the date is unknown |
 
@@ -81,6 +88,7 @@ plus:
 ```yaml
 ticker: XOM
 direction: long
+risk_bucket: growth               # from the brief, unchanged
 verdict: pass                    # pass | reject
 plan:                            # null when there is no chart setup at all
   entry: 118.40

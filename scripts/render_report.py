@@ -131,8 +131,10 @@ def confidence_bar(label: str, value: Any) -> str:
 def rec_card(rec: dict[str, Any], profile: dict[str, Any]) -> str:
     m = plan_metrics(rec)
     direction = (rec.get("direction") or "").lower()
-    max_loss = num(profile.get("max_loss_per_trade_pct"))
-    min_rr = num(profile.get("min_reward_to_risk"))
+    bucket = rec.get("risk_bucket")
+    bucket_limits = (profile.get("buckets") or {}).get(bucket) or {}
+    max_loss = num(bucket_limits.get("max_loss_per_trade_pct"))
+    min_rr = num(bucket_limits.get("min_reward_to_risk"))
     cur = rec.get("current_price") or {}
 
     tiles = [
@@ -184,7 +186,8 @@ def rec_card(rec: dict[str, Any], profile: dict[str, Any]) -> str:
       <h2>{e(rec.get('ticker'))} <span class="company">{e(rec.get('company'))}</span></h2>
       <p class="muted">{e(rec.get('sector'))}{' · ' if rec.get('sector') else ''}{e(rec.get('horizon'))} horizon · <code>{e(rec.get('candidate_id'))}</code></p>
     </div>
-    {chip(direction.upper() or '?', 'long' if direction == 'long' else 'short')}
+    <div>{chip(direction.upper() or '?', 'long' if direction == 'long' else 'short')}
+    {chip(bucket, f'bucket-{bucket}') if bucket else ''}</div>
   </header>
   <div class="plan">
     <div class="tiles">{tiles_html}</div>
@@ -310,6 +313,9 @@ padding:2px 8px;border-radius:999px;background:var(--chip);color:var(--muted);wh
 .chip-long,.chip-verified{background:var(--gain-bg);color:var(--gain)}
 .chip-short,.chip-contradicted{background:var(--loss-bg);color:var(--loss)}
 .chip-unverified{background:var(--warn-bg);color:var(--warn)}
+.chip-bucket-core{background:var(--gain-bg);color:var(--gain)}
+.chip-bucket-growth{background:var(--warn-bg);color:var(--warn)}
+.chip-bucket-speculative{background:var(--loss-bg);color:var(--loss)}
 .conf{display:grid;grid-template-columns:140px 1fr 40px;align-items:center;gap:8px;font-size:13.5px;margin:4px 0}
 .bar{height:6px;background:var(--chip);border-radius:3px;overflow:hidden}.bar span{display:block;height:100%;background:var(--accent)}
 .card-foot{border-top:1px solid var(--line);margin-top:16px;padding-top:12px;display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap}
@@ -322,8 +328,13 @@ footer.page{color:var(--muted);font-size:13px;margin-top:24px}
 """
 
 
+BUCKET_ORDER = ["core", "growth", "speculative"]
+
+
 def render(data: dict[str, Any]) -> str:
     recs = data.get("recommendations") or []
+    recs = sorted(recs, key=lambda r: BUCKET_ORDER.index(r["risk_bucket"])
+                  if r.get("risk_bucket") in BUCKET_ORDER else len(BUCKET_ORDER))
     profile = data.get("profile") or {}
     bt = data.get("backtest")
     title = f"{'Backtest' if bt else 'Pipeline'} run {data.get('run_id', '')}"

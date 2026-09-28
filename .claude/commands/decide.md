@@ -19,8 +19,8 @@ Record the user's decision. Arguments: $ARGUMENTS
    with `decided_at` = now, the note verbatim under "Why", and an empty trade log.
 4. On `accept`: create `workspace/positions/<candidate_id>/position.md` from the
    technical analysis plan the recommendation points to (entry, stop, target, horizon,
-   direction) and the profile's `level_trigger`, with `status: open` and `opened` empty
-   until the user reports the trade. Trade facts only: never the note.
+   direction, `risk_bucket`) and the profile's `level_trigger`, with `status: open` and
+   `opened` empty until the user reports the trade. Trade facts only: never the note.
    On `reject`: nothing else is created.
 5. Confirm in two lines what was recorded and, on accept, that the position is now
    watched and that the user places the trade themselves.

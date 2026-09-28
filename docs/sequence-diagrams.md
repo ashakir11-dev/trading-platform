@@ -35,20 +35,21 @@ sequenceDiagram
         MW->>A1: brief (sector, direction, upstream = scanner folder)
         A1->>WS: read scanner output + raw/
         A1->>EQ: holdings, screen, prices, filings, events
-        A1->>WS: companies/*.md, output.md (ranked shortlist)
+        A1->>WS: companies/*.md, output.md (ranked shortlist,<br/>each passer scored + risk_bucket: core/growth/speculative)
     end
-    Note over MW: passed, best score first, cap per sector;<br/>record duplicates and conflicts
+    Note over MW: passed, best score first, cap per sector;<br/>record duplicates and conflicts;<br/>carry each company's risk_bucket forward unchanged
     par one per candidate
-        MW->>A2: brief (ticker, direction, upstream = scanner + sector)
+        MW->>A2: brief (ticker, direction, risk_bucket, upstream = scanner + sector)
         A2->>EQ: fundamentals, filings, guidance, estimates, insiders...
         A2->>WS: output.md (verdict, catalyst checks)
     end
     par one per candidate that passed
-        MW->>A3: brief (ticker, upstream = company, profile)
+        MW->>A3: brief (ticker, risk_bucket, upstream = company, profile)
         A3->>EQ: prices (statistics + levels), quote, earnings
-        A3->>WS: output.md (plan + rule results)
+        Note over A3: rules checked against profile.buckets[risk_bucket]
+        A3->>WS: output.md (plan + rule results, risk_bucket unchanged)
     end
-    Note over MW: recompute price order, max loss,<br/>reward:risk; a mismatch blocks it
+    Note over MW: recompute price order, max loss,<br/>reward:risk against the candidate's bucket;<br/>a mismatch blocks it
     MW->>WS: report.md
     MW-->>User: report
     User->>MW: /decide <candidate_id> accept|reject
@@ -71,7 +72,7 @@ sequenceDiagram
     par one per open position
         MW->>A5: brief (position, last check, cooldown state)
         A5->>WS: read position, plan, earlier analyses
-        Note over A5: tripwires: stop/target, missed entry,<br/>material news; 12h cooldown;<br/>full re-review on alert or every 14 days
+        Note over A5: tripwires: stop/target, missed entry,<br/>material news; 12h cooldown;<br/>full re-review on alert or every 14 days,<br/>a new plan checked against the position's risk_bucket
         A5->>WS: output.md
     end
     MW->>WS: position state, alerts.md

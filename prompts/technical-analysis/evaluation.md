@@ -28,5 +28,9 @@ would-be target distance, if a plan was sketched).
 
 **Reasoning:** were the stop and target at levels the chart justified (swing points,
 ATR) or placed to fit the rules? Was event risk (earnings) weighed? Was a plan sitting
-right at a rule limit (reward:risk within 0.1 of the minimum, max loss within 0.5
-points)? That is a warning sign worth recording.
+right at its `risk_bucket`'s rule limit (reward:risk within 0.1 of the bucket's minimum,
+max loss within 0.5 points of the bucket's maximum)? That is a warning sign worth
+recording. Also note whether the bucket's reward shape actually played out (did a
+`speculative` pick's realised move match its bigger target, or did it behave like a
+`core` one) — that's a signal for the sector deep dive's bucket calls, not just the
+technical plan.
