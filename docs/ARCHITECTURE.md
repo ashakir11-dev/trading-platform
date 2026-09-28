@@ -7,8 +7,10 @@ Code subagents, prompts, hooks, the workspace) is in
 is kept in [`architecture-summary.html`](architecture-summary.html).
 
 All market data comes from **Equibles** (see §6). It is a
-**research and decision-support system**. It never places orders. A human makes
-every go/no-go call.
+**research and decision-support system**. A human makes every go/no-go call
+(`/decide`); the system does not place orders on its own initiative. Since 2026-09-28,
+the user can optionally have `/trade` place the resulting order for forward testing,
+but only against a **paper** brokerage account (§5) — never a live one.
 
 ## 1. Overview
 
@@ -175,12 +177,17 @@ recorded and delivered with the next alert, so nothing material is lost.
 | Forward testing | Every live run is graded by the evaluators as outcomes arrive, including candidates nobody traded: the "shadow ledger" of [`testing-research.md`](testing-research.md), Phase 0. |
 | Models (D5, revisited) | Per agent, in `.claude/agents/` (design doc §11). |
 
+**Decided (2026-09-28):**
+
+| Decision | Choice | Why |
+|---|---|---|
+| Broker paper trading | **Added, scoped to forward testing.** `scripts/broker_alpaca.py` places and checks orders against Alpaca's paper-trading endpoint only (hard-coded, no live-account path). It is a plain script, not an MCP tool or subagent capability: no agent definition lists it, so no stage/follow-up/evaluator agent can call it, and `.claude/hooks/workspace_guard.py` denies any subagent `Bash` call naming it as defense in depth. Only the middleware agent runs it, and only from `/trade`'s new `broker-buy`/`broker-sell`/`broker-status` modes, triggered solely by the user typing that command. A filled order is recorded exactly like a manually-reported trade (`entered`/`exited` on `position.md`), plus the order id (`broker_entry_order_id`/`broker_exit_order_id`, `prompts/formats.md`). | Relaxes the no-orders rule enough for forward testing without weakening the one-way middleware principle or the decisions firewall: execution still requires the user's explicit `/trade` command, and no agent gains a path to place or influence an order. |
+
 **Open:**
 
 - **Plan margins.** Recommendations have repeatedly sat right at the profile's limits
   (e.g. max loss 7.8% vs 8%, reward:risk 2.03 vs 2.0). Whether plans should keep a
   margin from the limits is the user's call.
-- **Broker paper trading** would relax the no-orders rule and needs an explicit decision.
 
 **Future enhancements (not planned now):**
 
@@ -262,7 +269,9 @@ running it.
 decisions firewall and raw-data capture (hooks), price statistics, a one-stage backtest.
 
 **Built, not yet exercised end to end:** follow-up (`/follow-up`, `/trade`), evaluation
-and feedback (`/evaluate`, `/feedback`, `/approve`), a full four-stage backtest.
+and feedback (`/evaluate`, `/feedback`, `/approve`), a full four-stage backtest, and the
+new paper-trading path in `/trade` (`broker-buy`/`broker-sell`/`broker-status`), which
+has not yet placed a real paper order against a live Alpaca paper account.
 
 **Still open:**
 - **Plan margins** (§5).

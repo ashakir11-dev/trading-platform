@@ -79,6 +79,12 @@ def test_backtest_agents_have_no_data_tools(project):
     assert guard.pre(event(project, "mcp__equibles__GetStockPrices", agent_type="sector-deep-dive-backtest"))
 
 
+def test_subagents_cannot_run_the_broker_script(project):
+    args = {"command": "python3 scripts/broker_alpaca.py submit --symbol XOM --side buy --qty 50"}
+    assert guard.pre(event(project, "Bash", args))
+    assert guard.pre(event(project, "Bash", args, agent=None)) is None  # the middleware agent may
+
+
 def test_data_calls_need_a_claimed_folder_and_are_saved_to_raw(project):
     tool = "mcp__equibles__GetStockPrices"
     assert "Claim your analysis folder" in guard.pre(event(project, tool))

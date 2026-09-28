@@ -143,8 +143,16 @@ last_check: null              # follow-up state, kept by the middleware agent
 last_full_review: null
 last_alert_at: null
 held_alerts: []
+broker: null                  # "alpaca_paper" once a broker order was placed for this position
+broker_entry_order_id: null   # Alpaca paper order id for the entry, if placed through /trade
+broker_exit_order_id: null    # Alpaca paper order id for the exit, if placed through /trade
 ---
 ```
+
+`broker*` fields are order facts (id, and the fill they produced), the same kind of thing
+as `entry`/`exit_price` — never decision text. They are set only when the user places the
+trade through `/trade ... broker-buy|broker-sell`; a manually placed or reported trade
+leaves them `null`.
 
 `positions/<position_id>/alerts.md`: one line per alert,
 `- <as_of> <delivered|held> <kind>: <detail> (run <run_id>)`.

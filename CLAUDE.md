@@ -7,7 +7,13 @@ split outcomes/reasoning review) and the open decisions — and
 `docs/prompt-subagents-design.md` for how the subagents, hooks and workspace implement them.
 
 Hard rules:
-- Decision support only. Never add order-placing code; any quotes/brokerage adapter stays read-only.
+- Decision support, with paper-trading execution for forward testing (decided 2026-09-28; was
+  "decision support only, no order-placing code" before). The only order-placing code is
+  `scripts/broker_alpaca.py`, hard-coded to Alpaca's **paper** endpoint (never configurable to a live
+  account); it is a plain script, not an MCP tool or subagent capability, so no stage/follow-up/evaluator
+  agent can call it. Only the middleware agent may run it, and only from `/trade`, and only when the user
+  types that command — never on the pipeline's own initiative. Every quotes/data adapter besides it stays
+  read-only.
 - Equibles is the data vendor; anything it doesn't provide is deferred, not sourced elsewhere.
 - Agents reach MCP servers only through the tools listed in their subagent definition (`.claude/agents/*.md`),
   read-only tools only; every Equibles write tool (portfolios, lots, watches, reports) stays on the deny list
@@ -26,3 +32,5 @@ raw-data capture, and turns price responses into statistics (`price_stats.py`, a
 only, no network); keep `tests/test_render_report.py` passing.
 
 Dev: `pip install pytest && pytest` (tests cover the hooks). Running the pipeline: `docs/operations.md`.
+Paper trading setup and the `/trade` broker workflow: `docs/operations.md` §1 and §4; keep
+`tests/test_broker_alpaca.py` passing when changing `scripts/broker_alpaca.py`.
