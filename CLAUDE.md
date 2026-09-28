@@ -8,16 +8,25 @@ split outcomes/reasoning review) and the open decisions — and
 
 Hard rules:
 - Decision support, with paper-trading execution for forward testing (decided 2026-09-28; was
-  "decision support only, no order-placing code" before). The only order-placing code is
-  `scripts/broker_alpaca.py`, hard-coded to Alpaca's **paper** endpoint (never configurable to a live
-  account); it is a plain script, not an MCP tool or subagent capability, so no stage/follow-up/evaluator
-  agent can call it. Only the middleware agent may run it, and only from `/trade`, and only when the user
-  types that command — never on the pipeline's own initiative. Every quotes/data adapter besides it stays
-  read-only.
-- Equibles is the data vendor; anything it doesn't provide is deferred, not sourced elsewhere.
+  "decision support only, no order-placing code" before). Two paper-trading paths exist, both **only**
+  against Alpaca's **paper** account, never live, and both usable only by the middleware agent /
+  interactively by you — never by a stage, follow-up or evaluator agent:
+  1. `scripts/broker_alpaca.py`, hard-coded to Alpaca's paper REST endpoint (not configurable to a live
+     account from this script). Not an MCP tool or subagent capability. `/trade`'s `broker-buy` /
+     `broker-sell` / `broker-status` modes are its only caller.
+  2. The `alpaca` MCP server (`.mcp.json`, the community `alpaca-mcp-server`), for interactive/manual use
+     (orders, positions, watchlists). `ALPACA_PAPER_TRADE` is pinned to `"true"` as a literal in the
+     checked-in `.mcp.json` (not `${...}`-substituted from the environment), so it can only be flipped to
+     live by a reviewed change to that file.
+  Both are kept out of every `.claude/agents/*.md` tool list, and `.claude/hooks/workspace_guard.py` denies
+  a subagent (`agent_id` set) from running `broker_alpaca.py` via `Bash` or calling any `mcp__alpaca__*`
+  tool at all, as defense in depth. Every quotes/data adapter besides these two stays read-only.
+- Equibles is the data vendor for research data; anything it doesn't provide is deferred, not sourced
+  elsewhere. (The `alpaca` MCP server is account/order state, not a market-data source, and no agent may
+  use it for either.)
 - Agents reach MCP servers only through the tools listed in their subagent definition (`.claude/agents/*.md`),
   read-only tools only; every Equibles write tool (portfolios, lots, watches, reports) stays on the deny list
-  in `.claude/settings.json`.
+  in `.claude/settings.json`, and no agent definition lists any `mcp__alpaca__*` tool.
 - User accept/reject decisions must never reach any agent (stage, follow-up, evaluator or feedback) or prompt;
   only the middleware agent reads `workspace/decisions/`.
 - Every run has an `as_of`; agent prompts must forbid using data dated after it, and every tool result an agent

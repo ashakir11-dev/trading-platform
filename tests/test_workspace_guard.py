@@ -85,6 +85,13 @@ def test_subagents_cannot_run_the_broker_script(project):
     assert guard.pre(event(project, "Bash", args, agent=None)) is None  # the middleware agent may
 
 
+@pytest.mark.parametrize("tool", ["mcp__alpaca__place_stock_order", "mcp__alpaca__get_orders",
+                                   "mcp__alpaca__get_account"])
+def test_subagents_cannot_call_the_alpaca_mcp_server(project, tool):
+    assert guard.pre(event(project, tool))
+    assert guard.pre(event(project, tool, agent=None)) is None  # the middleware agent may
+
+
 def test_data_calls_need_a_claimed_folder_and_are_saved_to_raw(project):
     tool = "mcp__equibles__GetStockPrices"
     assert "Claim your analysis folder" in guard.pre(event(project, tool))

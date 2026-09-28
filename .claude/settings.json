@@ -1,6 +1,7 @@
 {
   "enabledMcpjsonServers": [
-    "equibles"
+    "equibles",
+    "alpaca"
   ],
   "permissions": {
     "allow": [

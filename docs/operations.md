@@ -5,9 +5,12 @@ optional **paper-trading execution for forward testing**: `/decide` only *record
 accept/reject, and `/trade`'s manual modes (`entered`/`exited`) only *record* a trade you
 made elsewhere. `/trade`'s `broker-*` modes (§4) are the one place that places an order —
 always against Alpaca's **paper** account, never a live one, and always by your explicit
-command. No agent in the pipeline can place, change or cancel an order; your decisions
-are stored apart from everything the agents read, and a hook blocks every agent from
-them and from the broker script.
+command. There is also an `alpaca` MCP server (`.mcp.json`) for interactive, manual
+paper trading in chat — orders, positions, watchlists — pinned to paper mode in the
+checked-in config. No agent in the pipeline can place, change or cancel an order, or use
+either the broker script or the alpaca MCP server for anything at all; your decisions are
+stored apart from everything the agents read, and a hook blocks every agent from them and
+from both paper-trading paths.
 
 The design behind this is in [`prompt-subagents-design.md`](prompt-subagents-design.md).
 
@@ -21,6 +24,13 @@ The design behind this is in [`prompt-subagents-design.md`](prompt-subagents-des
   and `ALPACA_API_SECRET_KEY` from a **paper trading** account's keys on the Alpaca
   dashboard (not a live account — `scripts/broker_alpaca.py` only ever calls the paper
   endpoint, so live keys would just fail against it).
+- Optional, only if you want the interactive `alpaca` MCP server for manual testing
+  (orders, positions, watchlists, in chat): the [`uv`](https://docs.astral.sh/uv/getting-started/installation/)
+  package manager (it runs the server via `uvx`, no separate install step), and
+  `ALPACA_API_KEY` / `ALPACA_SECRET_KEY` — the same paper account's keys, just under the
+  names this server expects (different from `ALPACA_API_KEY_ID`/`ALPACA_API_SECRET_KEY`
+  above, which are only for the script). `ALPACA_PAPER_TRADE` is pinned to `"true"` in
+  `.mcp.json` itself, not read from the environment, so setting it yourself has no effect.
 
 Keep the keys out of shell history and the repository, e.g. in
 `~/.trading-platform/env` (`chmod 600`):
@@ -30,11 +40,15 @@ export ANTHROPIC_API_KEY=...
 export EQUIBLES_API_KEY=...
 export ALPACA_API_KEY_ID=...        # optional: only for /trade broker-buy|broker-sell
 export ALPACA_API_SECRET_KEY=...
+export ALPACA_API_KEY=...           # optional: only for the interactive alpaca MCP server
+export ALPACA_SECRET_KEY=...
 ```
 
 **Once per machine:** start `claude` in the repository and accept the trust dialog and
-the `equibles` MCP server (`.mcp.json`). Until then Claude Code ignores the project's
-permission allow rules; the hooks and deny rules apply either way.
+the `equibles` and `alpaca` MCP servers (`.mcp.json`). Until then Claude Code ignores the
+project's permission allow rules; the hooks and deny rules apply either way. Every
+`alpaca` MCP tool call still prompts for your approval unless you allow-list it yourself
+(none are pre-approved in `.claude/settings.json`).
 
 **Profile.** Copy `profile.example.json` to `workspace/profile.json` and edit it: risk
 tolerance, horizons, shorts, max loss, reward:risk, `level_trigger`, notes (see
