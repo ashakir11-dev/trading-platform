@@ -35,7 +35,13 @@ all.
    rankings mode is not your job.
 2. `GetCongressionalTrades` for your ticker, `startDate` = `as_of` minus 365 days,
    `endDate` = `as_of`. This is every member's disclosed purchase or sale in the ticker
-   over the trailing year, newest first.
+   over the trailing year, newest first. It does not carry each member's chamber, so
+   for the table's `Position` column call `SearchCongressMembers` once per distinct
+   member name in the response (batch these in one message).
+3. **Match names to the scorecard case-insensitively, ignoring titles** ("Rep.", "Sen.",
+   "Dr."). If a name in the trades response doesn't match any scorecard row closely,
+   confirm it with `SearchCongressMembers` before deciding it's genuinely unscored —
+   don't let a spelling difference silently drop a scored member into "unscored".
 
 ## The formula
 
@@ -51,9 +57,10 @@ For each trade in the window:
    - Purchase + `long`, or Sale + `short` → **+1** (agrees)
    - Sale + `long`, or Purchase + `short` → **-1** (opposes)
    - `Asset` is not plain stock (an option, a bond) → **0**, still shown
-4. **`recency_weight`** = `max(0, 1 - days_since_disclosure / 365)` — 1.0 on the
-   disclosure date, decaying straight to 0 at the edge of the one-year window. Use the
-   **filing date**, not the transaction date (the transaction date can be up to 45 days
+4. **`recency_weight`** = `max(0, 1 - days_since_disclosure / 365)`, where
+   `days_since_disclosure` = `as_of` minus the trade's **filing** date, in days — 1.0 on
+   the disclosure date, decaying straight to 0 at the edge of the one-year window. Use
+   the filing date, not the transaction date (the transaction date can be up to 45 days
    older, per the STOCK Act).
 5. **`contribution`** = `member_score × direction_match × recency_weight` for that
    trade.
@@ -87,6 +94,14 @@ before `as_of`.
 - **Net worth is not part of the formula.** `GetMemberNetWorth` measures wealth, not
   trading skill, and disclosed values are bands. If you fetch it for a member (optional,
   for the "Congressional activity" narrative), report it as context only.
+
+## What `confidence` means here
+
+You have no pass/reject verdict, so the common frontmatter's `confidence` isn't "how
+sure am I this call is right." It's how much you trust the **data behind the number**:
+high when the scorecard is fresh and several scored members traded; low when the
+scorecard is stale, thin (few qualifying members overall), or missing (per Step 1
+above, `confidence` should be low and `congress_adjustment: 0.0`).
 
 ## Output
 

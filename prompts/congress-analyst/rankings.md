@@ -25,13 +25,17 @@ Collect every distinct member named in "largest participants" across all returne
 rows. This finds members with disclosed activity in the trailing year; a member with
 no activity in a year has nothing to score anyway.
 
-## Step 2: each member's trade history
+## Step 2: resolve members, then each one's trade history
 
-For every distinct member found, `GetMemberTrades(memberName, startDate=<as_of minus
-about 3 years>, endDate=as_of, maxResults=500)`, batched in one message per member
-(several members per message; this can be dozens of calls — send them in waves rather
-than one at a time). Use the exact `Name` the tool returns, and `SearchCongressMembers`
-first only if a name is ambiguous.
+For every distinct member found, call `SearchCongressMembers(query=<name>)` to get
+their canonical `Name` and `Position` (Senator/Representative) together — you need
+`Position` for the scorecard table anyway, so this replaces a separate "only if
+ambiguous" lookup. Batch these across all distinct members in one message.
+
+Then, for every resolved member, `GetMemberTrades(memberName=<canonical Name>,
+startDate=<as_of minus about 3 years>, endDate=as_of, maxResults=500)`, batched in
+waves (several members per message; this can be dozens of calls — send them in waves
+rather than one at a time).
 
 ## Step 3: score each member's purchases
 
@@ -58,8 +62,11 @@ first only if a name is ambiguous.
 Among **qualifying** members only:
 
 1. `win_rate_norm` = min-max scale each member's win rate to `[0, 1]` across the
-   qualifying set (the lowest win rate → 0, the highest → 1).
-2. `return_norm` = same min-max scale for avg forward return.
+   qualifying set (the lowest win rate → 0, the highest → 1). If every qualifying
+   member has the same win rate (max equals min, including the single-member case),
+   `win_rate_norm = 0.5` for everyone rather than dividing by zero.
+2. `return_norm` = same min-max scale for avg forward return, with the same all-equal
+   guard.
 3. `composite = 0.6 × win_rate_norm + 0.4 × return_norm`.
 4. Rank by `composite`, highest first (rank 1 = best).
 5. `percentile = 100 × (n_scored - rank) / (n_scored - 1)` (rank 1 → 100, last → 0; a
