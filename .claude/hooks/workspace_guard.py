@@ -9,7 +9,15 @@ even when a prompt is ignored. They contain no pipeline logic.
   * a subagent touching ``workspace/decisions/`` (the user's decisions) in any way;
   * a Equibles data call from the middleware agent (it never fetches data), from a
     ``*-backtest`` agent (backtests read gatekeeper data packs only), or from a subagent
-    that has not claimed its analysis folder yet.
+    that has not claimed its analysis folder yet;
+  * a subagent invoking ``scripts/broker_alpaca.py`` (paper-trading orders): only the
+    middleware agent, from ``/trade``, may place or check an order. No stage, follow-up
+    or evaluator agent has a broker tool, so this is defense in depth, not the only
+    guard;
+  * a subagent calling any ``mcp__alpaca__*`` tool at all (the alpaca-mcp-server, added
+    for interactive/manual paper trading; ``.mcp.json`` pins it to
+    ``ALPACA_PAPER_TRADE=true``). It is never listed in any subagent definition, so this
+    is defense in depth too.
 
 ``post`` (PostToolUse, ``Write``/``Edit`` and Equibles tools):
   * a subagent's first write inside ``workspace/agents/<agent>/analyses/<run>/<subject>/``
@@ -38,6 +46,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import price_stats  # noqa: E402
 
 EQUIBLES_PREFIX = "mcp__equibles__"
+ALPACA_PREFIX = "mcp__alpaca__"
 WRITE_TOOLS = frozenset({
     "CreateMyPortfolio", "DeleteMyPortfolio", "AddPortfolioLot", "UpdatePortfolioLot",
     "ClosePortfolioLot", "RemovePortfolioLot", "WatchInstrument", "UnwatchInstrument",
@@ -191,6 +200,16 @@ def pre(event: dict[str, Any]) -> str | None:
         return ("workspace/decisions/ holds the user's decisions; only the middleware agent may "
                 "read it, and it never reaches a stage agent. Give searches a narrower path "
                 "(e.g. your analysis folder).")
+
+    if agent_id and tool == "Bash" and "broker_alpaca.py" in (event.get("tool_input") or {}).get("command", ""):
+        return ("scripts/broker_alpaca.py places paper-trading orders; only the middleware agent, "
+                "from /trade, may run it.")
+
+    if agent_id and lower.startswith(ALPACA_PREFIX):
+        return ("The alpaca MCP server (orders, positions, account) is for interactive use by you and "
+                "the middleware agent only; no stage, follow-up or evaluator agent has any use for it "
+                "and none may call it, market-data reads included. Equibles is the only data vendor "
+                "agents read from.")
 
     if agent_id and (agent_type.endswith("-backtest") or agent_type == "pit-auditor") \
             and _touches_gatekeeper_raw(event):

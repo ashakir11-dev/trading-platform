@@ -1,14 +1,19 @@
 ---
-description: Record that you entered or exited an accepted position
-argument-hint: "<position_id> entered|exited <price> [YYYY-MM-DD] [size]"
+description: Record that you entered or exited an accepted position, or place/check a paper order for it
+argument-hint: "<position_id> entered|exited <price> [YYYY-MM-DD] [size] | <position_id> broker-buy|broker-sell <qty> [limit_price] | <position_id> broker-status"
 model: claude-sonnet-5
+allowed-tools: Bash(python3 scripts/broker_alpaca.py:*)
 ---
 You are the middleware agent. Read `prompts/middleware/role.md` and
 `prompts/formats.md`, and follow them.
 
-Record a trade the user made. Arguments: $ARGUMENTS
-(position_id, `entered` or `exited`, the price, optional date (default today, New York
-time) and optional size).
+Arguments: $ARGUMENTS. First word is always `position_id`; second word picks the mode.
+
+## Manual: `entered` / `exited`
+
+Use this when the trade happened somewhere else (your own broker, by hand) and you're
+just recording it. Arguments: position_id, `entered` or `exited`, the price, optional
+date (default today, New York time) and optional size.
 
 1. `workspace/positions/<position_id>/position.md` must exist; if not, stop and say so.
 2. `entered`: set `opened` = the date and `entry` = the price (keep the planned entry as
@@ -20,3 +25,42 @@ time) and optional size).
 4. Confirm in one or two lines. After an exit, suggest `/evaluate --run <run_id>`.
 
 Trade facts go into the position file; nothing else from the decision file does.
+
+## Paper trading: `broker-buy` / `broker-sell` / `broker-status`
+
+**Forward testing only, and only on this command.** No stage, follow-up or evaluator
+agent has a broker tool; `scripts/broker_alpaca.py` talks only to Alpaca's paper-trading
+endpoint (hard-coded in the script, never configurable to a live account), and a hook
+blocks every subagent from running it. You are the only caller, and only when the user
+types this command — never place or size an order on your own initiative.
+
+Requires `ALPACA_API_KEY_ID` and `ALPACA_API_SECRET_KEY` (a paper account's keys) in the
+environment; if the script reports they're missing, stop and tell the user to set them
+(see `docs/operations.md`).
+
+**`broker-buy <qty> [limit_price]` / `broker-sell <qty> [limit_price]`:**
+
+1. `workspace/positions/<position_id>/position.md` must exist and be `status: open`.
+   `broker-buy` only while `opened` is empty; `broker-sell` only after `opened` is set.
+2. side = `buy` for `broker-buy`, `sell` for `broker-sell`. Run:
+   `python3 scripts/broker_alpaca.py submit --symbol <ticker> --side <side> --qty <qty>
+   --wait 30` (add `--type limit --limit-price <limit_price>` if a limit price was
+   given). Show the user the raw JSON result.
+3. If the order's `status` is `filled`: treat it exactly like the manual case above
+   (`entered`/`exited`, using `filled_avg_price` as the price and today, New York time,
+   as the date unless the fill has its own date), and additionally set `broker:
+   alpaca_paper` and `broker_entry_order_id` or `broker_exit_order_id` = the order's
+   `id` on the position file.
+4. If it is not yet filled (e.g. a limit order still `new`/`accepted`), do **not** touch
+   `opened`/`entry`/`status`/`exit_price` — only record the order id
+   (`broker_entry_order_id` or `broker_exit_order_id`) and `broker: alpaca_paper` on the
+   position, and tell the user to check back with `broker-status`.
+5. Append the same trade-log row as the manual case once (and only once) a fill is
+   recorded, noting the broker order id.
+
+**`broker-status`:** read the pending order id off the position file and run
+`python3 scripts/broker_alpaca.py status <order_id>`. If it has since filled, apply
+step 3 above; otherwise just show the current status.
+
+Never run `broker_alpaca.py cancel`, `positions` or `account` from here unless the user
+explicitly asks for that check.

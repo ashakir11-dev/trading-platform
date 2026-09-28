@@ -1,9 +1,16 @@
 # Operating the pipeline
 
-How to set up, run and operate the system day to day. It is **decision support only**:
-no command places, changes or cancels an order. `/decide` and `/trade` only *record*
-what you decided or did. Your decisions are stored apart from everything the agents
-read, and a hook blocks every agent from them.
+How to set up, run and operate the system day to day. It is **decision support**, with
+optional **paper-trading execution for forward testing**: `/decide` only *records* your
+accept/reject, and `/trade`'s manual modes (`entered`/`exited`) only *record* a trade you
+made elsewhere. `/trade`'s `broker-*` modes (§4) are the one place that places an order —
+always against Alpaca's **paper** account, never a live one, and always by your explicit
+command. There is also an `alpaca` MCP server (`.mcp.json`) for interactive, manual
+paper trading in chat — orders, positions, watchlists — pinned to paper mode in the
+checked-in config. No agent in the pipeline can place, change or cancel an order, or use
+either the broker script or the alpaca MCP server for anything at all; your decisions are
+stored apart from everything the agents read, and a hook blocks every agent from them and
+from both paper-trading paths.
 
 The design behind this is in [`prompt-subagents-design.md`](prompt-subagents-design.md).
 
@@ -13,6 +20,17 @@ The design behind this is in [`prompt-subagents-design.md`](prompt-subagents-des
 - `ANTHROPIC_API_KEY` for the agents.
 - `EQUIBLES_API_KEY` for market data. The Plus plan or better: a full run makes a few
   hundred data calls (the Free plan allows 100 a day), and Plus turns on live quotes.
+- Optional, only if you want `/trade` to place paper orders (§4): `ALPACA_API_KEY_ID`
+  and `ALPACA_API_SECRET_KEY` from a **paper trading** account's keys on the Alpaca
+  dashboard (not a live account — `scripts/broker_alpaca.py` only ever calls the paper
+  endpoint, so live keys would just fail against it).
+- Optional, only if you want the interactive `alpaca` MCP server for manual testing
+  (orders, positions, watchlists, in chat): the [`uv`](https://docs.astral.sh/uv/getting-started/installation/)
+  package manager (it runs the server via `uvx`, no separate install step), and
+  `ALPACA_API_KEY` / `ALPACA_SECRET_KEY` — the same paper account's keys, just under the
+  names this server expects (different from `ALPACA_API_KEY_ID`/`ALPACA_API_SECRET_KEY`
+  above, which are only for the script). `ALPACA_PAPER_TRADE` is pinned to `"true"` in
+  `.mcp.json` itself, not read from the environment, so setting it yourself has no effect.
 
 Keep the keys out of shell history and the repository, e.g. in
 `~/.trading-platform/env` (`chmod 600`):
@@ -20,11 +38,17 @@ Keep the keys out of shell history and the repository, e.g. in
 ```sh
 export ANTHROPIC_API_KEY=...
 export EQUIBLES_API_KEY=...
+export ALPACA_API_KEY_ID=...        # optional: only for /trade broker-buy|broker-sell
+export ALPACA_API_SECRET_KEY=...
+export ALPACA_API_KEY=...           # optional: only for the interactive alpaca MCP server
+export ALPACA_SECRET_KEY=...
 ```
 
 **Once per machine:** start `claude` in the repository and accept the trust dialog and
-the `equibles` MCP server (`.mcp.json`). Until then Claude Code ignores the project's
-permission allow rules; the hooks and deny rules apply either way.
+the `equibles` and `alpaca` MCP servers (`.mcp.json`). Until then Claude Code ignores the
+project's permission allow rules; the hooks and deny rules apply either way. Every
+`alpaca` MCP tool call still prompts for your approval unless you allow-list it yourself
+(none are pre-approved in `.claude/settings.json`).
 
 **Profile.** Copy `profile.example.json` to `workspace/profile.json` and edit it:
 shorts, `level_trigger`, notes, and per-risk-bucket (`core`/`growth`/`speculative`)
@@ -67,9 +91,13 @@ can be opened offline or shared as a file. One agent on its own: `/run-agent <ag
 
 ```
 /decide <candidate_id> accept "half size"     # or: reject
-/trade <position_id> entered 118.40           # when you have actually bought
+/trade <position_id> entered 118.40           # when you bought it yourself, elsewhere
+# — or, to have the pipeline place the paper order instead:
+/trade <position_id> broker-buy 50            # market order; add a price for a limit order
+/trade <position_id> broker-status            # check a still-pending order
 /follow-up                                    # one tick over open positions (schedule it)
-/trade <position_id> exited 131.10 2026-10-30 # when you have exited
+/trade <position_id> exited 131.10 2026-10-30 # manual exit
+/trade <position_id> broker-sell 50           # or: paper-close it
 /evaluate                                     # grade runs at least a week old
 /feedback <agent>                             # propose lessons for one agent
 /approve <agent> <proposal_id>                # or: ... reject
@@ -77,9 +105,13 @@ can be opened offline or shared as a file. One agent on its own: `/run-agent <ag
 
 1. **Decide.** Only recommended candidates can be decided, once each. `accept` opens a
    watched position from the technical plan (`position_id` = `candidate_id`); you place
-   the trade yourself. `reject` is recorded and nothing is watched.
-2. **Trade.** Record your actual entry and exit; only the prices and dates reach the
-   position file.
+   the trade yourself, or have `/trade` do it (next). `reject` is recorded and nothing is
+   watched.
+2. **Trade.** Record your actual entry and exit (`entered`/`exited`); only the prices and
+   dates reach the position file. Or have `/trade` place the order itself with
+   `broker-buy`/`broker-sell`, against your Alpaca **paper** account only — this is the
+   one command in the whole pipeline that places an order, and only runs when you type
+   it. A filled order is recorded exactly like a manual trade, plus its order id.
 3. **Follow up.** Each tick checks every open position: price against stop and target
    (per the profile's `level_trigger`), a missed entry, and material news. A delivered
    alert, or 14 days since the last one, triggers a full re-review (hold / adjust plan /

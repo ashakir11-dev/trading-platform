@@ -7,8 +7,10 @@ Code subagents, prompts, hooks, the workspace) is in
 is kept in [`architecture-summary.html`](architecture-summary.html).
 
 All market data comes from **Equibles** (see §6). It is a
-**research and decision-support system**. It never places orders. A human makes
-every go/no-go call.
+**research and decision-support system**. A human makes every go/no-go call
+(`/decide`); the system does not place orders on its own initiative. Since 2026-09-28,
+the user can optionally have `/trade` place the resulting order for forward testing,
+but only against a **paper** brokerage account (§5) — never a live one.
 
 ## 1. Overview
 
@@ -216,13 +218,14 @@ recorded and delivered with the next alert, so nothing material is lost.
 | Decision | Choice | Why |
 |---|---|---|
 | Risk buckets (§4a) | Agent 1 assigns each passing company a `risk_bucket` (`core`/`growth`/`speculative`) from conviction × catalyst-type magnitude, alongside `potential_score`; `profile.json` becomes a `buckets` map of per-bucket limits; technical analysis applies the candidate's bucket's limits. Assigned once at Agent 1, never re-scored downstream; magnitude comes from catalyst type, never chart volatility. | A single 0-100 score conflated conviction with reward shape ("safe and likely" vs. "risky but big" are different trade types, not different ranks). Fixing the bucket at Agent 1 keeps one company mapped to one candidate and keeps the fundamental/technical filters independent (principle 3). |
+| Broker paper trading | **Added, scoped to forward testing.** `scripts/broker_alpaca.py` places and checks orders against Alpaca's paper-trading endpoint only (hard-coded, no live-account path). It is a plain script, not an MCP tool or subagent capability: no agent definition lists it, so no stage/follow-up/evaluator agent can call it, and `.claude/hooks/workspace_guard.py` denies any subagent `Bash` call naming it as defense in depth. Only the middleware agent runs it, and only from `/trade`'s new `broker-buy`/`broker-sell`/`broker-status` modes, triggered solely by the user typing that command. A filled order is recorded exactly like a manually-reported trade (`entered`/`exited` on `position.md`), plus the order id (`broker_entry_order_id`/`broker_exit_order_id`, `prompts/formats.md`). | Relaxes the no-orders rule enough for forward testing without weakening the one-way middleware principle or the decisions firewall: execution still requires the user's explicit `/trade` command, and no agent gains a path to place or influence an order. |
+| Alpaca MCP server | **Added, for interactive/manual use, not the pipeline.** `.mcp.json` adds the community `alpaca-mcp-server` (orders, positions, account, watchlists), with `ALPACA_PAPER_TRADE` pinned to the literal `"true"` in the checked-in config (not read from the environment), so flipping it to live trading requires a reviewed change to `.mcp.json` itself. No `.claude/agents/*.md` lists any `mcp__alpaca__*` tool, and `workspace_guard.py` denies the whole prefix to any subagent (`agent_id` set) as defense in depth — it is never a data source for an agent either (Equibles stays the only one). Only you, and the middleware agent if a command is later written to use it, can call it. | You wanted the full toolset (not just order submit/status) for hands-on testing against the real paper account; keeping it out of every subagent's tools and pinning paper mode in the repo (rather than trusting an env var) keeps the no-agent-execution guarantee and the paper-only guarantee both intact. |
 
 **Open:**
 
 - **Plan margins.** Recommendations have repeatedly sat right at the profile's limits
   (e.g. max loss 7.8% vs 8%, reward:risk 2.03 vs 2.0). Whether plans should keep a
   margin from the limits is the user's call.
-- **Broker paper trading** would relax the no-orders rule and needs an explicit decision.
 
 **Future enhancements (not planned now):**
 
@@ -304,7 +307,9 @@ running it.
 decisions firewall and raw-data capture (hooks), price statistics, a one-stage backtest.
 
 **Built, not yet exercised end to end:** follow-up (`/follow-up`, `/trade`), evaluation
-and feedback (`/evaluate`, `/feedback`, `/approve`), a full four-stage backtest.
+and feedback (`/evaluate`, `/feedback`, `/approve`), a full four-stage backtest, and the
+new paper-trading path in `/trade` (`broker-buy`/`broker-sell`/`broker-status`), which
+has not yet placed a real paper order against a live Alpaca paper account.
 
 **Still open:**
 - **Plan margins** (§5).

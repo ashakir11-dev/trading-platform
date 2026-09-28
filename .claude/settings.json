@@ -1,6 +1,7 @@
 {
   "enabledMcpjsonServers": [
-    "equibles"
+    "equibles",
+    "alpaca"
   ],
   "permissions": {
     "allow": [
@@ -15,6 +16,8 @@
       "Bash(git rev-parse:*)",
       "Bash(git status:*)",
       "Bash(python3 scripts/render_report.py:*)",
+      "Bash(python3 scripts/broker_alpaca.py submit:*)",
+      "Bash(python3 scripts/broker_alpaca.py status:*)",
       "mcp__equibles__GetStockPrices",
       "mcp__equibles__GetLatestClosingPrices",
       "mcp__equibles__GetLiveQuote",

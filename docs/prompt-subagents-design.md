@@ -101,6 +101,8 @@ prompts/
                                  (isolation; a past date runs in backtest mode)
   decide.md                      /decide <candidate_id> accept|reject [note]
   trade.md                       /trade <position_id> entered|exited <price> [date]
+                                 (or broker-buy|broker-sell <qty> [limit_price] |
+                                 broker-status: a paper order via scripts/broker_alpaca.py)
   follow-up.md                   /follow-up                      (cron)
   evaluate.md                    /evaluate [<agent>] [--since DATE]
   feedback.md                    /feedback <agent>
@@ -230,7 +232,7 @@ listed in the mode table above.
 | company-deep-dive | `GetFinancialFact`, `GetFinancialStatement`, `ListFilings`, `SearchDocument`, `ReadDocumentLines`, `GetInvestorRelationsNews`, `GetGuidance`, `GetAnalystEstimates`, `GetEarningsCallTranscript`, `GetUpcomingInvestorEvents` |
 | technical-analysis | `GetStockPrices`, `GetLiveQuote`, `GetLatestClosingPrices`, `GetAverageTrueRange`, `GetBollingerBands`, `GetStochasticOscillator`, `GetOnBalanceVolume`, `GetUpcomingInvestorEvents` |
 | follow-up (Agent 5) | `GetLiveQuote`, `GetStockPrices`, `ListFilings`, `GetInvestorRelationsNews`, plus `Read` on **all** of `agents/` and `positions/`, not on `decisions/` (§7) |
-| middleware | none directly; launches the agents, reads/writes `runs/` and `decisions/` |
+| middleware | none directly (no Equibles tools); launches the agents, reads/writes `runs/` and `decisions/`, and may run `scripts/broker_alpaca.py` (paper orders, `/trade` only) |
 
 Evaluator subagents get only `GetStockPrices` / `GetLatestClosingPrices`. Feedback
 subagents get no Equibles tools. Today `technicals.py` computes indicators and pivots
@@ -278,6 +280,8 @@ per-agent rules possible. They hold no pipeline logic.
 | PostToolUse | The first write inside `workspace/agents/<agent>/analyses/<run>/<subject>/` claims that folder for the subagent. |
 | PostToolUse | Every Equibles response a subagent receives is saved verbatim to `<folder>/raw/NNN-<Tool>.json`. Raw data travels with the analysis without the agent re-typing it, and evaluation sees exactly what the agent saw. |
 | PreToolUse | `*-backtest` agents and the `pit-auditor` can't read `runs/<run>/.gatekeeper/` (the gatekeeper's unfiltered responses); searches must stay inside a pack or analysis folder. |
+| PreToolUse | A subagent (`agent_id` set) can't run `scripts/broker_alpaca.py` via `Bash`: only the middleware agent places or checks a paper order, and only from `/trade`. Defense in depth — no agent's tool list includes it either. |
+| PreToolUse | A subagent can't call any `mcp__alpaca__*` tool (the `alpaca` MCP server, added for interactive/manual paper trading, `.mcp.json`). It is never a data source or an execution path for any agent — no agent definition lists it, and this is defense in depth on top of that. |
 | PostToolUse | Gatekeeper responses are saved to `runs/<run>/.gatekeeper/<stage>/<subject>/raw/`, not into the pack. A `GetStockPrices` response is copied into the pack with every bar that hadn't closed (16:00 New York) by `as_of` removed: a mechanical filter on top of the gatekeeper's own and the auditor's check. |
 | PostToolUse | A `GetStockPrices` response (up to 500 daily rows) is replaced, for the agent, by statistics computed from it (`.claude/hooks/price_stats.py`): returns with their base closes, 20/50/200-day averages, 52-week range, ATR14, dollar volume; for the technical agent also swing highs/lows and weekly bars. The full rows stay in `raw/`. This is arithmetic only: it keeps the agents' context small (a 500-row response becomes ~1K characters), makes the numbers exact, and removes the slowest part of a run. |
 
@@ -293,9 +297,15 @@ per-agent rules possible. They hold no pipeline logic.
 | **Equibles call budget** | Fixed calls per stage | Agents choose. | Not considered for now (D5). |
 | **Repeatability** | Same data per stage for one `as_of` | Each run fetches differently. | `raw/` records what each agent saw, so evaluation can tell "bad reasoning" from "didn't look". |
 
-Unchanged: decision support only (no order tools anywhere), Equibles as the only
-vendor, swing/long-term only, agents independent within a stage, outcomes separate
-from reasoning review.
+Unchanged: no order tool reachable by any agent, Equibles as the only data vendor,
+swing/long-term only, agents independent within a stage, outcomes separate from
+reasoning review. Changed (2026-09-28): the middleware agent may place a **paper**
+order via `scripts/broker_alpaca.py` from `/trade`, at the user's explicit command
+(ARCHITECTURE.md §5, "Broker paper trading"); it stays outside every agent's tool list.
+Also added the `alpaca` MCP server (`.mcp.json`) for interactive/manual paper trading
+(ARCHITECTURE.md §5, "Alpaca MCP server") — pinned to paper in the checked-in config,
+and, like the script, outside every agent's tool list and blocked for subagents by
+`workspace_guard.py` regardless.
 
 ## 8. Decisions
 
