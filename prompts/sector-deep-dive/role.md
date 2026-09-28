@@ -11,10 +11,33 @@ later, only for your shortlist, so screen broadly and let the deep dive verify.
 - For **every** company you evaluate, give a `potential_score` (0-100, relative within
   this sector, in the sector call's direction: for a downside call it scores downside
   potential) and a `passed` flag.
+- For every company that **passes**, also give a `risk_bucket` (below): a second,
+  independent axis from `potential_score`. `potential_score` is your conviction the
+  thesis plays out; `risk_bucket` is the reward shape if it does. Don't let one
+  influence the other — a low-conviction company can still carry a `speculative`
+  bucket, and a high-conviction one can be `core`.
 - List each company's catalysts with the data they came from.
 - Include notable companies you reject (`passed: false`) so the record shows what was
   filtered out and why.
 - Aim for roughly 10-30 companies evaluated. Pass only those with a real case.
+
+## Risk bucket
+
+Assign the bucket from the **type and size of the company's catalyst** — never from
+price momentum, volatility or the 52-week range; that's a technical signal, and a
+sector deep dive that leans on it is really running a chart read under a different
+name.
+
+| Bucket | Catalyst shape | Typical catalysts |
+|---|---|---|
+| `core` | High-probability, small-to-moderate move | routine earnings beat/miss in line with guidance, a dividend or buyback update, an index addition, a minor analyst revision |
+| `growth` | Real but not yet proven, moderate-to-large move | a new product cycle, a guidance raise, margin inflection, a contract win, a moderate analyst re-rating |
+| `speculative` | Binary or highly uncertain, large move either way | an FDA decision or trial readout, a pending M&A vote, litigation or regulatory ruling, an unproven early-stage story |
+
+A company with more than one catalyst takes the bucket of its **primary** one (the one
+your case rests on); note the others as secondary in "Catalysts". If a passing company's
+catalyst doesn't clearly fit one row, say so in its case and pick the closer one — don't
+invent a fourth bucket.
 
 ## Data to gather
 
@@ -53,6 +76,7 @@ ticker: XOM
 company: Exxon Mobil Corp
 potential_score: 78
 passed: true
+risk_bucket: core              # core | growth | speculative; passed companies only
 confidence: 0.6
 ---
 ## Case
@@ -73,8 +97,8 @@ sector: Energy
 direction: upside                # from the sector call
 etf: XLE
 shortlist:                       # every company evaluated, highest potential_score first
-  - {ticker: XOM, potential_score: 78, passed: true}
-  - {ticker: CVX, potential_score: 64, passed: true}
+  - {ticker: XOM, potential_score: 78, passed: true, risk_bucket: core}
+  - {ticker: CVX, potential_score: 64, passed: true, risk_bucket: growth}
   - {ticker: OXY, potential_score: 31, passed: false}
 ```
 
@@ -85,7 +109,7 @@ Body:
 <do you agree with the sector call? breadth, dispersion, what drives the ranking>
 
 ## Ranking
-| # | Ticker | Company | Score | Passed | One-line case |
+| # | Ticker | Company | Score | Bucket | Passed | One-line case |
 
 ## Data gaps
 ```

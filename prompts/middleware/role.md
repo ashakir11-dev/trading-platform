@@ -76,12 +76,13 @@ agent reported) and carry on with the others. Never write an agent's output your
 
 1. From each shortlist take the companies with `passed: true`, highest
    `potential_score` first, at most `--shortlist N` (default 30) per sector. Direction:
-   upside → `long`, downside → `short`.
+   upside → `long`, downside → `short`. Carry each company's `risk_bucket` forward
+   unchanged — it is fixed at the sector deep dive and no later stage re-scores it.
 2. The same ticker from more than one sector: record it under "Conflicts", as
    `direction_conflict` if the directions differ, else `duplicate`. The first one
    (in the order the sectors were pursued) advances.
 3. Each advancing company becomes a candidate: `candidate_id` = `<run_id>-<TICKER>`.
-   List it under "Forwarded".
+   List it under "Forwarded" with its `risk_bucket`.
 
 **Company deep dive:** launch one `company-deep-dive` per forwarded candidate, in
 parallel. Subject: the ticker. Upstream: the market scanner's folder and the sector
@@ -91,15 +92,17 @@ in one line.
 
 **Technical analysis:** launch one `technical-analysis` per candidate that passed, in
 parallel. Subject: the ticker. Upstream: the company deep dive's folder. Profile: the
-run's `profile.json`. Task: `Candidate <candidate_id>: <TICKER>, <long|short>.`
+run's `profile.json`. Task: `Candidate <candidate_id>: <TICKER>, <long|short>,
+risk_bucket <core|growth|speculative>.`
 
 **Recommendation check.** Read the technical frontmatter. The candidate is recommended
 only if `verdict: pass`, a `plan` is present and no rule has `outcome: reject`. Before
-listing it, recompute from the plan's numbers and the profile:
+listing it, look up the candidate's `risk_bucket` in the profile's `buckets` map and
+recompute from the plan's numbers and that bucket's limits:
 
 - price order: long s < e < t, short t < e < s;
-- max loss: |e − s| / e × 100 ≤ `max_loss_per_trade_pct`;
-- reward:risk: |t − e| / |e − s| ≥ `min_reward_to_risk`.
+- max loss: |e − s| / e × 100 ≤ the bucket's `max_loss_per_trade_pct`;
+- reward:risk: |t − e| / |e − s| ≥ the bucket's `min_reward_to_risk`.
 
 If your numbers disagree with the agent's rule results, do not recommend: record the
 candidate under "Not pursued" as `rule check mismatch: <rule>, agent <x>, recomputed <y>`.

@@ -17,14 +17,15 @@ As of <as_of> · prompt <prompt_commit> · profile <name> · options <...>
 ## <Sector> (<direction>)
 <the sector deep dive's sector view in 2-3 sentences; say if it disagreed with the call>
 
-| # | Ticker | Company | Score | Passed | Forwarded | One-line case |
-|---|---|---|---|---|---|---|
+| # | Ticker | Company | Score | Bucket | Passed | Forwarded | One-line case |
+|---|---|---|---|---|---|---|---|
 
 ## Candidates
-| Candidate | Company deep dive | Catalysts (verified / unverified / contradicted) | Technical | Why, in one line |
-|---|---|---|---|---|
+| Candidate | Bucket | Company deep dive | Catalysts (verified / unverified / contradicted) | Technical | Why, in one line |
+|---|---|---|---|---|---|---|
 
 ## Recommendations
+<grouped by risk_bucket: core, then growth, then speculative>
 <candidate_id, ticker, direction, entry / stop / target, horizon, rule flags>
 <"None: ..." with the reason when empty>
 
@@ -61,13 +62,17 @@ as for `report.md`: copy the agents' values and words, never soften or add to th
   "run_id": "20260925T213314Z",
   "as_of": "2026-09-25T21:33:14Z",
   "prompt_commit": "174a3ea",
-  "profile": {"name": "<profile name>", "max_loss_per_trade_pct": 8, "min_reward_to_risk": 2},
+  "profile": {"name": "<profile name>", "buckets": {
+    "core": {"max_loss_per_trade_pct": 5, "min_reward_to_risk": 1.5},
+    "growth": {"max_loss_per_trade_pct": 8, "min_reward_to_risk": 2},
+    "speculative": {"max_loss_per_trade_pct": 15, "min_reward_to_risk": 3}
+  }},
   "backtest": null,
   "funnel": {"sectors_called": 4, "sectors_pursued": 1, "companies_screened": 25,
              "candidates": 3, "passed_company": 2, "recommended": 1},
   "recommendations": [{
     "candidate_id": "20260925T213314Z-XOM", "ticker": "XOM", "company": "Exxon Mobil Corp",
-    "sector": "Energy", "direction": "long", "horizon": "swing",
+    "sector": "Energy", "direction": "long", "risk_bucket": "growth", "horizon": "swing",
     "entry": 118.40, "stop": 111.00, "target": 134.00,
     "entry_condition": "daily close above 118.40 (breakout over the August high)",
     "invalidation": "daily close back below 113.50",
@@ -93,7 +98,11 @@ as for `report.md`: copy the agents' values and words, never soften or add to th
 
 - Plan numbers, flags, catalysts, `next_earnings` and confidences are copied from the
   frontmatter of the candidate's technical-analysis and company-deep-dive `output.md`;
-  `flags` are the technical rules with `outcome: flag`.
+  `flags` are the technical rules with `outcome: flag`. `risk_bucket` is copied from
+  the sector deep dive's shortlist entry for this ticker (unchanged since).
+- `profile.buckets` lists every bucket's `max_loss_per_trade_pct` and
+  `min_reward_to_risk` so the page can show which limits applied to each
+  recommendation without re-deriving them.
 - With no recommendations, `recommendations` is `[]` and `no_recommendation_reason` is
   the "None: ..." line of `report.md`.
 - Backtests: `backtest` is `{"point_in_time": "<audited | leaks-found>", "limits":

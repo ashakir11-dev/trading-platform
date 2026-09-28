@@ -48,7 +48,7 @@ Step-by-step runtime flow (sequence diagrams): [`sequence-diagrams.md`](sequence
 | Stage | Agent (prompts in `prompts/<agent>/`) | Runs | Input | Output |
 |---|---|---|---|---|
 | Agent 0: Market Scanner | `market-scanner` | once per run | sector ETF performance + macro data | sectors with upside/downside potential |
-| Agent 1: Sector Deep Dive | `sector-deep-dive` | one per sector, in parallel | sector call + **bulk screen of the sector's companies** (ratios, size, prices, recent filings/events) + breadth, FDA, earnings | shortlist **ranked by potential score** |
+| Agent 1: Sector Deep Dive | `sector-deep-dive` | one per sector, in parallel | sector call + **bulk screen of the sector's companies** (ratios, size, prices, recent filings/events) + breadth, FDA, earnings | shortlist **ranked by potential score**, each with a **risk bucket** (§4a) |
 | Company Deep Dive | `company-deep-dive` | one per company, in parallel | shortlist entry + market/sector/macro data + **full company data** (fundamentals, filings, guidance, estimates, transcripts, insider and short data) | worthiness verdict; catalysts checked |
 | Technical Analysis | `technical-analysis` | one per company, in parallel, **no cross-comparison** | candidate + **investor profile** + price statistics, swing levels and weekly bars for the horizon's charts + earnings date | chart verdict + entry / stop / target / horizon / chart timeframe, or rejection; then the **profile's rules** |
 | Middleware | the commands in `.claude/commands/` | orchestrates | | report to the user; records the user's decisions |
@@ -89,13 +89,47 @@ Step-by-step runtime flow (sequence diagrams): [`sequence-diagrams.md`](sequence
 
 ## 4. Investor profile, horizons and rules
 
-**Investor profile** (`workspace/profile.json`, example in `profile.example.json`): who the pipeline works for, including risk tolerance, allowed
-holding horizons, whether shorts are allowed, maximum loss per trade, minimum
-reward:risk, target return, how stop/target hits are detected (`level_trigger`), and
-free-text notes. It is the user's *preferences*, set up
-front, not a decision, so showing it to agents does not break the one-way middleware
-principle. The technical agent and Agent 5's full review read it, and the rules
-enforce it.
+**Investor profile** (`workspace/profile.json`, example in `profile.example.json`): who the pipeline works for. It holds settings shared across every
+trade (whether shorts are allowed, how stop/target hits are detected — `level_trigger`
+— and free-text notes) plus a **`buckets` map**: one set of holding horizons, maximum
+loss per trade, minimum reward:risk and target return **per risk bucket** (§4a). It is
+the user's *preferences*, set up front, not a decision, so showing it to agents does not
+break the one-way middleware principle. The technical agent and Agent 5's full review
+read it, and the rules enforce it.
+
+### 4a. Risk buckets
+
+Agent 1 (sector deep dive) assigns every company it passes a **`risk_bucket`** —
+`core`, `growth` or `speculative` — alongside its `potential_score`. This is a second,
+independent axis: `potential_score` is *conviction* (how likely the thesis plays out);
+`risk_bucket` is *reward shape* (how large a move the thesis implies if it does).
+Combining them into one 0-100 score would hide that a high-conviction, small-catalyst
+company and a low-conviction, binary-catalyst company are different kinds of trade, not
+different points on the same ladder. A company with neither a real case nor a
+meaningful catalyst doesn't get a bucket at all — it's `passed: false`, same as today.
+
+- **Assigned once, at Agent 1, and never re-scored downstream.** Company deep dive and
+  technical analysis do not change it. This keeps one company mapped to exactly one
+  candidate; letting later stages re-bucket (or bucketing the same ticker multiple ways)
+  would fork a candidate into several plans and multiply the conflict-tracking below.
+- **Magnitude comes from the catalyst, not the chart.** The bucket is set from the
+  *type and size of the catalyst* Agent 1 found (a binary regulatory or M&A event
+  implies a bigger move than a dividend hike or a routine estimate beat), never from
+  price volatility (ATR, historical range). Volatility is a **technical** signal; using
+  it at Agent 1 would blur principle 3 (fundamental and technical are independent
+  filters) by letting a chart-shaped judgment leak into the fundamental screen.
+- **The bucket selects a profile, not a plan.** Technical analysis still derives entry,
+  stop and target from chart structure alone — a bucket never dictates a literal stop
+  distance a chart doesn't support. What the bucket picks is *which* limits from
+  `profile.json`'s `buckets` map apply (`max_loss_per_trade_pct`, `min_reward_to_risk`,
+  allowed `horizons`, `target_return_pct`) when the technical agent checks its plan
+  against the rules. A `core` company that can't produce a plan inside the `core`
+  bucket's tighter limits is rejected, same as any other rule failure — its levels are
+  never loosened to fit.
+- **Carried through, not recomputed.** The bucket travels with the candidate from the
+  "Forwarded" list through company deep dive (unused there, kept for the record) to
+  technical analysis, and into the position file, so follow-up's full re-review checks
+  a new plan against the same bucket's limits.
 
 **Horizons and chart timeframes.** Each horizon has its own charts; the technical
 agent reads levels from the primary chart and trend from the context chart, and
@@ -110,16 +144,18 @@ Day trading is **not** supported: it conflicts with principle 7 (intraday data g
 stale while the pipeline runs). Adding it would need a decision to change that principle.
 
 **Rules** (`prompts/technical-analysis/role.md`). Rules never make judgment calls: they
-catch mechanical errors, enforce the profile and flag known risks. The technical agent
-applies every rule to its own plan and records each result with its numbers, and the
-middleware recomputes price order, max loss and reward:risk before recommending (a
-mismatch blocks the recommendation). The evaluator can therefore tell a rule veto from
-a judgment failure. `reject` removes the candidate; `flag` warns the user in the report.
+catch mechanical errors, enforce the profile's **bucket** and flag known risks. The
+technical agent applies every rule to its own plan, against the limits of the
+candidate's `risk_bucket`, and records each result with its numbers; the middleware
+recomputes price order, max loss and reward:risk against the same bucket before
+recommending (a mismatch blocks the recommendation). The evaluator can therefore tell a
+rule veto from a judgment failure. `reject` removes the candidate; `flag` warns the user
+in the report.
 
 | Rule | Outcome | When |
 |---|---|---|
 | `plan_price_order` | reject | long needs stop < entry < target; short the reverse |
-| `profile_horizon` | reject | plan horizon not in the profile's horizons |
+| `profile_horizon` | reject | plan horizon not in the candidate's bucket's horizons |
 | `chart_timeframe` | flag | plan levels not read from the horizon's primary chart |
 | `profile_short` | reject | short plan when shorts are not allowed; downside sector calls are then not pursued |
 | `max_loss` | reject | stop further from entry than `max_loss_per_trade_pct` |
@@ -174,6 +210,12 @@ recorded and delivered with the next alert, so nothing material is lost.
 | Rules and outcomes (D3) | In prompts; the middleware recomputes the plan arithmetic. |
 | Forward testing | Every live run is graded by the evaluators as outcomes arrive, including candidates nobody traded: the "shadow ledger" of [`testing-research.md`](testing-research.md), Phase 0. |
 | Models (D5, revisited) | Per agent, in `.claude/agents/` (design doc §11). |
+
+**Decided (2026-09-28):**
+
+| Decision | Choice | Why |
+|---|---|---|
+| Risk buckets (§4a) | Agent 1 assigns each passing company a `risk_bucket` (`core`/`growth`/`speculative`) from conviction × catalyst-type magnitude, alongside `potential_score`; `profile.json` becomes a `buckets` map of per-bucket limits; technical analysis applies the candidate's bucket's limits. Assigned once at Agent 1, never re-scored downstream; magnitude comes from catalyst type, never chart volatility. | A single 0-100 score conflated conviction with reward shape ("safe and likely" vs. "risky but big" are different trade types, not different ranks). Fixing the bucket at Agent 1 keeps one company mapped to one candidate and keeps the fundamental/technical filters independent (principle 3). |
 
 **Open:**
 

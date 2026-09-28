@@ -57,8 +57,9 @@ Run it when an alert is delivered, or when `last_full_review` is empty or at lea
 - Does the technical plan still hold? Fresh bars, new swing levels, the next earnings
   date.
 - Recommend `hold`, `adjust_plan` (with a complete new plan) or `exit`. A new plan must
-  still pass every rule in `prompts/technical-analysis/role.md` against the profile;
-  apply them and record the results the same way.
+  still pass every rule in `prompts/technical-analysis/role.md` against the position's
+  `risk_bucket` in the profile's `buckets` map (the bucket itself never changes here,
+  same as at technical analysis); apply them and record the results the same way.
 
 ## Output
 

@@ -1,14 +1,26 @@
 {
   "name": "example",
-  "risk_tolerance": "moderate",
-  "horizons": [
-    "swing",
-    "long_term"
-  ],
   "allow_short": false,
-  "max_loss_per_trade_pct": 8.0,
-  "min_reward_to_risk": 2.0,
   "level_trigger": "close",
-  "target_return_pct": 15.0,
-  "notes": "Avoid tobacco and weapons. Prefer companies with positive free cash flow."
+  "notes": "Avoid tobacco and weapons. Prefer companies with positive free cash flow.",
+  "buckets": {
+    "core": {
+      "horizons": ["swing", "long_term"],
+      "max_loss_per_trade_pct": 5.0,
+      "min_reward_to_risk": 1.5,
+      "target_return_pct": 8.0
+    },
+    "growth": {
+      "horizons": ["swing", "long_term"],
+      "max_loss_per_trade_pct": 8.0,
+      "min_reward_to_risk": 2.0,
+      "target_return_pct": 15.0
+    },
+    "speculative": {
+      "horizons": ["swing"],
+      "max_loss_per_trade_pct": 15.0,
+      "min_reward_to_risk": 3.0,
+      "target_return_pct": 30.0
+    }
+  }
 }
