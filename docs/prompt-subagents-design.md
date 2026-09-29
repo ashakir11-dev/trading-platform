@@ -208,7 +208,7 @@ What you'd do differently (optional).
 | market-scanner | Did the sectors it called up/down move that way relative to SPY over the horizon? |
 | sector-deep-dive | Did higher `potential_score` companies do better, **including the ones not forwarded**? Did `risk_bucket` track real magnitude of outcome (§4a)? |
 | company-deep-dive | Did the catalysts it checked materialise? Were risks that later hit listed? |
-| technical-analysis | Stop or target first (per `level_trigger`), reward:risk realised, entries never filled; whether its trend and relative-strength reads (vs SPY and the sector ETF) held, and how plans with vs against their stage, sector and regime did. |
+| technical-analysis | Stop or target first (per `level_trigger`), reward:risk realised, entries never filled. |
 | follow-up | Were alerts material and timely? Did exit/adjust calls help? |
 
 Because prices of rejected and not-forwarded candidates are graded too, the evaluation
@@ -230,7 +230,7 @@ listed in the mode table above.
 | market-scanner | `GetStockPrices`, `GetLatestClosingPrices`, `GetEconomicIndicator`, `GetLatestEconomicIndicators`, `GetEconomicCalendar`, `GetVixHistory`, `GetPutCallRatios` |
 | sector-deep-dive | `GetEtfHoldings`, `GetStockPrices`, `ScreenStocks`, `GetValuationMultiples`, `ListFilings`, `GetFdaAdvisoryCommitteeMeetings`, `GetUpcomingInvestorEvents` |
 | company-deep-dive | `GetFinancialFact`, `GetFinancialStatement`, `ListFilings`, `SearchDocument`, `ReadDocumentLines`, `GetInvestorRelationsNews`, `GetGuidance`, `GetAnalystEstimates`, `GetEarningsCallTranscript`, `GetUpcomingInvestorEvents` |
-| technical-analysis | `GetStockPrices` (the stock, SPY and the sector ETF named in its brief), `GetLiveQuote`, `GetLatestClosingPrices`, `GetAverageTrueRange`, `GetBollingerBands`, `GetStochasticOscillator`, `GetOnBalanceVolume`, `GetVixHistory` (regime only), `GetUpcomingInvestorEvents`, `ListFilings` |
+| technical-analysis | `GetStockPrices`, `GetLiveQuote`, `GetLatestClosingPrices`, `GetAverageTrueRange`, `GetBollingerBands`, `GetStochasticOscillator`, `GetOnBalanceVolume`, `GetUpcomingInvestorEvents` |
 | follow-up (Agent 5) | `GetLiveQuote`, `GetStockPrices`, `ListFilings`, `GetInvestorRelationsNews`, plus `Read` on **all** of `agents/` and `positions/`, not on `decisions/` (§7) |
 | middleware | none directly (no Equibles tools); launches the agents, reads/writes `runs/` and `decisions/`, and may run `scripts/broker_alpaca.py` (paper orders, `/trade` only) |
 
@@ -283,8 +283,7 @@ per-agent rules possible. They hold no pipeline logic.
 | PreToolUse | A subagent (`agent_id` set) can't run `scripts/broker_alpaca.py` via `Bash`: only the middleware agent places or checks a paper order, and only from `/trade`. Defense in depth — no agent's tool list includes it either. |
 | PreToolUse | A subagent can't call any `mcp__alpaca__*` tool (the `alpaca` MCP server, added for interactive/manual paper trading, `.mcp.json`). It is never a data source or an execution path for any agent — no agent definition lists it, and this is defense in depth on top of that. |
 | PostToolUse | Gatekeeper responses are saved to `runs/<run>/.gatekeeper/<stage>/<subject>/raw/`, not into the pack. A `GetStockPrices` response is copied into the pack with every bar that hadn't closed (16:00 New York) by `as_of` removed: a mechanical filter on top of the gatekeeper's own and the auditor's check. |
-| PostToolUse | A `GetStockPrices` response (up to 500 daily rows) is replaced, for the agent, by statistics computed from it (`.claude/hooks/price_stats.py`): returns with their base closes, 20/50/200-day averages, 52-week range, ATR14, dollar volume; for the technical agent also the chart-reading lines (MA slopes, 30-week MA, MA order and extension in ATRs, ATR and Bollinger-width contraction, up/down volume and dry-up, RSI14 at swing points), swing highs/lows and weekly bars. The full rows stay in `raw/`. This is arithmetic only: it keeps the agents' context small (a 500-row response becomes ~1K characters), makes the numbers exact, and removes the slowest part of a run. |
-| PostToolUse | For the technical agent (and technical-analysis backtest packs), once a folder holds a pair of tickers — the stock and SPY, the stock and its sector ETF, or the ETF and SPY — the response that completes the pair also gets a **relative-strength block** computed from both (RS line on common dates, return differences, RS highs/lows, the stock during the benchmark's deepest pullback). Each hook writes its own file before reading the others, so parallel fetches still produce every pair. |
+| PostToolUse | A `GetStockPrices` response (up to 500 daily rows) is replaced, for the agent, by statistics computed from it (`.claude/hooks/price_stats.py`): returns with their base closes, 20/50/200-day averages, 52-week range, ATR14, dollar volume; for the technical agent also swing highs/lows and weekly bars. The full rows stay in `raw/`. This is arithmetic only: it keeps the agents' context small (a 500-row response becomes ~1K characters), makes the numbers exact, and removes the slowest part of a run. |
 
 | Rule / principle | Today (code) | This design | Gap |
 |---|---|---|---|

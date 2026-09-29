@@ -87,10 +87,7 @@ and saved to `workspace/runs/<run_id>/report.md`; each recommendation shows its
 ladder (stop / entry / target / price now), max loss, potential gain, reward:risk,
 catalysts, flags and the agents' confidence. It is self-contained (no network), so it
 can be opened offline or shared as a file. One agent on its own: `/run-agent <agent> <subject>`, e.g.
-`/run-agent sector-deep-dive "Energy" upside` or `/run-agent technical-analysis NVDA long
-sector "Information Technology" (XLK)`. Name the sector for a technical run: the agent
-reads the chart against SPY and that sector ETF, and without one it compares with SPY
-only and records the gap.
+`/run-agent sector-deep-dive "Energy" upside` or `/run-agent technical-analysis NVDA`.
 
 ## 4. Workflow: decide → trade → follow up → evaluate → improve
 

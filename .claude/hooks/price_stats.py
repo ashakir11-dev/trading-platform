@@ -6,11 +6,6 @@ the agent fetched, no other data source and no judgment.
 
 All figures use the ``Close`` column (``High``/``Low`` for ranges and ATR). Trading-day
 offsets: 1w = 5, 1m = 21, 3m = 63, 6m = 126, 12m = 252 bars.
-
-For the technical agent (``with_levels``) it adds the chart-reading inputs: MA slopes and
-the 30-week MA (stage analysis), MA order and extension in ATRs, ATR and Bollinger-width
-contraction, volume accumulation/dry-up, RSI14 at each swing point, and (``relative``)
-the relative-strength line of one ticker against another from two responses.
 """
 
 from __future__ import annotations
@@ -21,8 +16,6 @@ from datetime import date
 
 RETURN_OFFSETS = (("1w", 5), ("1m", 21), ("3m", 63), ("6m", 126), ("12m", 252))
 SMAS = (20, 50, 200)
-RS_OFFSETS = (("1m", 21), ("3m", 63), ("6m", 126), ("12m", 252))
-BENCHMARKS = ("SPY", "IVV", "VOO")  # the market benchmark, in order of preference
 
 
 @dataclass(frozen=True)
@@ -154,178 +147,6 @@ def weekly(bars: list[Bar]) -> list[Bar]:
     return out
 
 
-def ticker_of(title: str) -> str | None:
-    """The ticker in an Equibles title line ("Daily prices for AAPL (Apple Inc.):")."""
-    m = re.search(r"prices for ([A-Za-z0-9.^\-]+)", title)
-    return m.group(1).upper() if m else None
-
-
-def _mean(values: list[float]) -> float:
-    return sum(values) / len(values)
-
-
-def _direction(change: float) -> str:
-    return "rising" if change > 0 else "falling" if change < 0 else "flat"
-
-
-def _sma_slope(closes: list[float], n: int, back: int, label: str, unit: str) -> tuple[str, float | None]:
-    """'<label> X vs Y <back> <unit> earlier (+a%, rising)' and the current value."""
-    if len(closes) < n + back:
-        return f"{label} slope n/a (needs {n + back} {unit}, have {len(closes)})", \
-            (_mean(closes[-n:]) if len(closes) >= n else None)
-    now, then = _mean(closes[-n:]), _mean(closes[-n - back:-back])
-    ch = _pct(now, then)
-    return f"{label} {_f(now)} vs {_f(then)} {back} {unit} earlier ({ch:+.2f}%, {_direction(ch)})", now
-
-
-def trend_lines(bars: list[Bar]) -> list[str]:
-    """MA slopes, the 30-week MA (Weinstein), MA order and extension from SMA50 in ATRs."""
-    closes = [b.close for b in bars]
-    wcloses = [w.close for w in weekly(bars)]
-    last = bars[-1].close
-    s50_txt, s50 = _sma_slope(closes, 50, 20, "SMA50", "bars")
-    s200_txt, s200 = _sma_slope(closes, 200, 20, "SMA200", "bars")
-    w30_txt, w30 = _sma_slope(wcloses, 30, 5, "30-week MA", "weeks")
-    if w30 is not None:
-        w30_txt += f", last weekly close {_pct(wcloses[-1], w30):+.2f}% vs it"
-    out = [f"Trend: {s50_txt}; {s200_txt}; {w30_txt} (weekly closes; the last week may be partial)."]
-    ranked = [("close", last), ("SMA50", s50), ("30-week MA", w30), ("SMA200", s200)]
-    known = sorted(((n, v) for n, v in ranked if v is not None), key=lambda x: -x[1])
-    missing = [n for n, v in ranked if v is None]
-    order = " > ".join(f"{n} {_f(v)}" for n, v in known) + (f" ({', '.join(missing)} n/a)" if missing else "")
-    a = atr(bars)
-    ext = f"; close vs SMA50: {(last - s50) / a:+.2f} ATR14" if a and s50 is not None else ""
-    out.append(f"MA order, highest first: {order}{ext}.")
-    return out
-
-
-def bollinger_widths(bars: list[Bar], n: int = 20, k: float = 2.0) -> list[float]:
-    """Bollinger band width (upper − lower) as % of the middle band, one per bar from bar n."""
-    closes = [b.close for b in bars]
-    out = []
-    for i in range(n, len(closes) + 1):
-        w = closes[i - n:i]
-        m = _mean(w)
-        sd = (sum((x - m) ** 2 for x in w) / n) ** 0.5
-        out.append(2 * k * sd / m * 100 if m else 0.0)
-    return out
-
-
-def volatility_line(bars: list[Bar], lookback: int = 126) -> str:
-    """ATR14 now vs 20 bars earlier; Bollinger(20,2) width and its percentile over lookback."""
-    parts = []
-    a_now, a_then = atr(bars), atr(bars[:-20]) if len(bars) > 20 else None
-    if a_now is not None and a_then:
-        parts.append(f"ATR14 {_f(a_now)} vs {_f(a_then)} 20 bars earlier (ratio {a_now / a_then:.2f})")
-    else:
-        parts.append("ATR14 trend n/a (needs 35 bars)")
-    widths = bollinger_widths(bars)
-    if len(widths) >= 20:
-        cur, win = widths[-1], widths[-lookback:]
-        pctile = sum(1 for w in win if w < cur) / len(win) * 100
-        parts.append(f"Bollinger(20,2) width {cur:.2f}% of SMA20; over the last {len(win)} bars low "
-                     f"{min(win):.2f}%, high {max(win):.2f}%, current at the {pctile:.0f}th percentile "
-                     f"(share of those bars with a narrower band)")
-    else:
-        parts.append("Bollinger width percentile n/a (needs 39 bars)")
-    return "Volatility: " + "; ".join(parts) + "."
-
-
-def volume_line(bars: list[Bar], n: int = 50, recent: int = 10, heaviest: int = 3) -> str:
-    """Average volume, recent dry-up, up/down volume ratio and the heaviest bars of the last n."""
-    if len(bars) < n + 1:
-        return f"Volume: n/a (needs {n + 1} bars, have {len(bars)})."
-    pairs = list(zip(bars[-n - 1:-1], bars[-n:]))
-    avg = _mean([b.volume for _, b in pairs])
-    rec = _mean([b.volume for b in bars[-recent:]])
-    up = sum(b.volume for p, b in pairs if b.close > p.close)
-    down = sum(b.volume for p, b in pairs if b.close < p.close)
-    ud = f"{up / down:.2f}" if down else "n/a (no down-close bars)"
-    top = sorted(pairs, key=lambda pb: -pb[1].volume)[:heaviest]
-    heavy = ", ".join(f"{b.day} ({_pct(b.close, p.close):+.2f}%, {b.volume / avg:.2f}x)" for p, b in top) \
-        if avg else "n/a"
-    ratio = f" ({rec / avg:.2f}x the {n}-bar average)" if avg else ""
-    return (f"Volume: {n}-bar average {avg:,.0f}; last {recent} bars average {rec:,.0f}{ratio}. "
-            f"Up/down volume, last {n} bars: {ud} (volume on up-close bars / volume on down-close bars). "
-            f"Heaviest bars of the last {n} (close change, x the {n}-bar average): {heavy}.")
-
-
-def relative(name: str, bars: list[Bar], bench_name: str, bench_bars: list[Bar],
-             window: int = 252, pullback_window: int = 126) -> str | None:
-    """Relative strength of ``name`` against ``bench_name`` on their common dates.
-
-    RS line = close / benchmark close. Return differences are percentage points over the
-    same common dates. None when fewer than 22 common dates."""
-    bench = {b.day: b.close for b in bench_bars}
-    common = [(b.day, b.close, bench[b.day]) for b in bars if bench.get(b.day) and b.close]
-    if len(common) < 22:
-        return None
-    d_last, s_last, m_last = common[-1]
-    diffs = []
-    for label, n in RS_OFFSETS:
-        if len(common) > n:
-            _, s0, m0 = common[-1 - n]
-            diffs.append(f"{label} {_pct(s_last, s0) - _pct(m_last, m0):+.2f} pp")
-        else:
-            diffs.append(f"{label} n/a")
-    rs = [s / m for _, s, m in common]
-    win, days = rs[-window:], [d for d, _, _ in common][-window:]
-    hi = max(range(len(win)), key=lambda i: (win[i], i))
-    lo = min(range(len(win)), key=lambda i: (win[i], -i))
-    recent_from = len(win) - 5
-    closes_win = [s for _, s, _ in common][-window:]
-    price_hi = max(range(len(closes_win)), key=lambda i: (closes_win[i], i))
-    ma = f"{_pct(rs[-1], _mean(rs[-50:])):+.2f}%" if len(rs) >= 50 else "n/a (needs 50 common dates)"
-    text = (f"Relative strength, {name} vs {bench_name} (RS line = {name} close / {bench_name} close, "
-            f"{len(common)} common dates {common[0][0]} to {d_last}): {name} return minus {bench_name} "
-            f"return {', '.join(diffs)}. RS line over the last {len(win)} common dates: high on {days[hi]} "
-            f"(last value {_pct(win[-1], win[hi]):+.2f}% from it), low on {days[lo]} (last value "
-            f"{_pct(win[-1], win[lo]):+.2f}% from it); new RS high in the last 5 dates: "
-            f"{'yes' if hi >= recent_from else 'no'}; new RS low in the last 5 dates: "
-            f"{'yes' if lo >= recent_from else 'no'}. RS line vs its 50-date mean: {ma}. {name} closing "
-            f"high over the same dates: {days[price_hi]}.")
-    pw = common[-pullback_window:]
-    peak, worst = 0, (0.0, 0, 0)
-    for i in range(len(pw)):
-        if pw[i][2] > pw[peak][2]:
-            peak = i
-        dd = _pct(pw[i][2], pw[peak][2])
-        if dd < worst[0]:
-            worst = (dd, peak, i)
-    if worst[0] < 0:
-        dd, p, t = worst
-        text += (f" {bench_name}'s deepest pullback in the last {len(pw)} common dates: {dd:+.2f}% "
-                 f"({_f(pw[p][2])} on {pw[p][0]} to {_f(pw[t][2])} on {pw[t][0]}); {name} over the same "
-                 f"dates: {_pct(pw[t][1], pw[p][1]):+.2f}% ({_f(pw[p][1])} to {_f(pw[t][1])}).")
-    else:
-        text += f" {bench_name} had no pullback in the last {len(pw)} common dates."
-    return text
-
-
-def relative_blocks(subject: str, series: dict[str, list[Bar]], new: str) -> list[str]:
-    """Relative-strength blocks for the pairs that involve ``new`` (the ticker just fetched).
-
-    Pairs: the subject against every other ticker fetched (the market benchmark, its
-    sector ETF), and every other non-benchmark ticker against the market benchmark (the
-    sector ETF vs SPY). Computed when the later of the two tickers arrives."""
-    subject, new = subject.upper(), new.upper()
-    bench = next((b for b in BENCHMARKS if b in series), None)
-    pairs = []
-    for other in sorted(series):
-        if other == subject:
-            continue
-        pairs.append((subject, other))
-        if bench and other != bench:
-            pairs.append((other, bench))
-    out = []
-    for a, b in dict.fromkeys(pairs):
-        if new in (a, b) and a in series and b in series:
-            block = relative(a, series[a], b, series[b])
-            if block:
-                out.append(block)
-    return out
-
-
 def _f(x: float) -> str:
     return f"{x:,.2f}"
 
@@ -383,20 +204,11 @@ def summary(text: str, *, raw_file: str, with_levels: bool = False) -> str:
                  + (f"; relative volume {rv:.2f}x (last bar vs its 20-bar average)" if rv is not None
                     else "; relative volume n/a") + ".")
     if with_levels:
-        lines += trend_lines(bars)
-        lines.append(volatility_line(bars))
-        lines.append(volume_line(bars))
         highs, lows = pivots(bars)
-        index = {b.day: i for i, b in enumerate(bars)}
-
-        def at(b: Bar, level: float) -> str:
-            r_at = rsi(bars[:index[b.day] + 1])
-            return f"{_f(level)} ({b.day}, RSI14 {r_at:.1f})" if r_at is not None else f"{_f(level)} ({b.day})"
-
         lines.append("Swing highs (5 bars each side), most recent last: "
-                     + (", ".join(at(b, b.high) for b in highs) or "none") + ".")
+                     + (", ".join(f"{_f(b.high)} ({b.day})" for b in highs) or "none") + ".")
         lines.append("Swing lows (5 bars each side), most recent last: "
-                     + (", ".join(at(b, b.low) for b in lows) or "none") + ".")
+                     + (", ".join(f"{_f(b.low)} ({b.day})" for b in lows) or "none") + ".")
         weeks = weekly(bars)[-104:]
         lines.append(f"Weekly bars (last {len(weeks)} weeks; date = last trading day of the week):")
         lines.append("| Week to | Open | High | Low | Close | Volume |")

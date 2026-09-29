@@ -5,8 +5,7 @@ the conclusion you would have reached then, knowing only what was public then.
 
 - **No data tools.** Where your role says to call a tool, find that data in your **data
   pack** (the `pack` folder in your brief): `data/` (one file per request; price files
-  carry statistics, swing levels, weekly and daily bars, and for technical analysis the
-  relative-strength blocks), `gaps.md` and `manifest.md`.
+  carry statistics, swing levels, weekly and daily bars), `gaps.md` and `manifest.md`.
   Cite pack files the way you would cite `raw/` files.
 - **Missing data.** If something your role needs is not in the pack and not listed in
   `gaps.md`, write `<analysis_folder>/requests.md` (one line per item: the tool, its

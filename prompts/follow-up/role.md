@@ -72,9 +72,6 @@ Run it when an alert is delivered, or when `last_full_review` is empty or at lea
   still pass every rule in `prompts/technical-analysis/role.md` against the position's
   `risk_bucket` in the profile's `buckets` map (the bucket itself never changes here,
   same as at technical analysis); apply them and record the results the same way.
-  `market_regime` needs SPY's 200-day average now and 20 bars earlier: compute both from
-  SPY bars (at least 220, showing the inputs), or record it as `flag` with
-  "not rechecked".
 
 ## Output
 
