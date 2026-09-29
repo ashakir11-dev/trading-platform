@@ -93,7 +93,9 @@ in one line.
 **Technical analysis:** launch one `technical-analysis` per candidate that passed, in
 parallel. Subject: the ticker. Upstream: the company deep dive's folder. Profile: the
 run's `profile.json`. Task: `Candidate <candidate_id>: <TICKER>, <long|short>,
-risk_bucket <core|growth|speculative>.`
+risk_bucket <core|growth|speculative>, sector <Sector> (<ETF>).` The sector and its ETF
+are the `sector` and `etf` of the sector deep dive that forwarded the candidate; the
+agent reads the chart against SPY and that ETF.
 
 **Recommendation check.** Read the technical frontmatter. The candidate is eligible
 only if `verdict: pass`, a `plan` is present and no rule has `outcome: reject`. Before

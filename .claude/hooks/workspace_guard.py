@@ -26,7 +26,9 @@ even when a prompt is ignored. They contain no pipeline logic.
     folder's ``raw/``, so raw data travels with the analysis without the agent copying it;
   * for the market scanner, sector deep dive and technical analysis, a ``GetStockPrices``
     response is replaced by statistics computed from it (``price_stats.py``); the full
-    rows stay in ``raw/``.
+    rows stay in ``raw/``. For the technical agent (and technical-analysis data packs)
+    the statistics also carry relative-strength blocks against the other tickers already
+    fetched into the same folder (the stock vs SPY and its sector ETF, the ETF vs SPY).
 
 Hook input (JSON on stdin) carries ``agent_id``/``agent_type`` only inside a subagent.
 """
@@ -306,16 +308,84 @@ def _pack_prices(event: dict[str, Any], folder: Path, raw_path: Path) -> None:
     data.mkdir(parents=True, exist_ok=True)
     name = raw_path.stem  # NNN-GetStockPrices
     if not kept:
-        (data / f"{name}.md").write_text(f"{title}\nNo bars closed by as_of {as_of.isoformat()} "
-                                         f"({dropped} later bars dropped).\n")
+        _atomic_write(data / f"{name}.md", f"{title}\nNo bars closed by as_of {as_of.isoformat()} "
+                                           f"({dropped} later bars dropped).\n")
         return
     table = [title, "", "| Date | Open | High | Low | Close | Volume |", "|---|---|---|---|---|---|"]
     table += [f"| {b.day} | {b.open} | {b.high} | {b.low} | {b.close} | {b.volume:.0f} |" for b in kept]
     text = "\n".join(table)
     stats = price_stats.summary(text, raw_file=f"data/{name}.md", with_levels=True)
-    (data / f"{name}.md").write_text(
-        f"<!-- copied by the hook from the gatekeeper's response; {dropped} bars after as_of "
-        f"{as_of.isoformat()} dropped -->\n{stats}\n\n## Daily bars\n\n{text}\n")
+    head = (f"<!-- copied by the hook from the gatekeeper's response; {dropped} bars after as_of "
+            f"{as_of.isoformat()} dropped -->\n")
+    path = data / f"{name}.md"
+    # Write first, then look for the other tickers: of two concurrent copies, the later
+    # scan always sees the other's complete file, so every pair is computed at least once.
+    _atomic_write(path, f"{head}{stats}\n\n## Daily bars\n\n{text}\n")
+    pack = _pack_parts(folder, event)
+    ticker = price_stats.ticker_of(title)
+    if pack and pack[1] == "technical-analysis" and ticker:
+        blocks = _safe_blocks(pack[2], lambda: _pack_price_series(data), ticker)
+        if blocks:
+            _atomic_write(path, f"{head}{stats}\n{_rs_text(blocks)}\n\n## Daily bars\n\n{text}\n")
+
+
+def _safe_blocks(subject: str, load, ticker: str) -> list[str]:
+    """Relative-strength blocks, or none: an extra, never a reason to lose the statistics."""
+    try:
+        return price_stats.relative_blocks(subject, load(), ticker)
+    except Exception:  # noqa: BLE001 - the hook must still return the price statistics
+        return []
+
+
+def _atomic_write(path: Path, text: str) -> None:
+    tmp = path.with_name(f".{path.name}.{os.getpid()}.tmp")
+    tmp.write_text(text)
+    os.replace(tmp, path)
+
+
+def _rs_text(blocks: list[str]) -> str:
+    return "Relative strength (computed from the other price responses in this folder):\n" \
+        + "\n".join(f"- {b}" for b in blocks)
+
+
+def _merge(series: dict[str, dict], ticker: str | None, bars: list) -> None:
+    if ticker:
+        days = series.setdefault(ticker.upper(), {})
+        for b in bars:
+            days[b.day] = b
+
+
+def _sorted_series(series: dict[str, dict]) -> dict[str, list]:
+    return {t: [days[d] for d in sorted(days)] for t, days in series.items()}
+
+
+def _pack_price_series(data: Path) -> dict[str, list]:
+    """Every ticker's bars in a pack's price files (already cut at as_of), chunks merged."""
+    series: dict[str, dict] = {}
+    for f in sorted(data.glob("*-GetStockPrices.md")):
+        body = f.read_text().split("## Daily bars", 1)
+        if len(body) < 2:
+            continue
+        try:
+            title, bars = price_stats.parse(body[1].strip())
+        except ValueError:
+            continue
+        _merge(series, price_stats.ticker_of(title), bars)
+    return _sorted_series(series)
+
+
+def _raw_price_series(raw: Path) -> dict[str, list]:
+    """Every ticker's bars in an analysis folder's saved price responses, chunks merged."""
+    series: dict[str, dict] = {}
+    for f in sorted(raw.glob("*-GetStockPrices.json")):
+        try:
+            saved = json.loads(f.read_text())
+            title, bars = price_stats.parse(_response_text(saved.get("response")))
+        except (OSError, ValueError, AttributeError):
+            continue  # still being written by a parallel call, or not a price table
+        args = saved.get("input") or {}
+        _merge(series, price_stats.ticker_of(title) or args.get("ticker") or args.get("symbol"), bars)
+    return _sorted_series(series)
 
 
 def _response_text(response: Any) -> str:
@@ -337,11 +407,20 @@ def _price_stats_output(event: dict[str, Any], path: Path) -> dict[str, Any] | N
         rel = path.relative_to(project_dir(event))
     except ValueError:
         rel = path
+    technical = (event.get("agent_type") or "").startswith("technical-analysis")
+    response = _response_text(event.get("tool_response"))
     try:
-        text = price_stats.summary(_response_text(event.get("tool_response")), raw_file=str(rel),
-                                   with_levels=(event.get("agent_type") or "").startswith("technical-analysis"))
+        text = price_stats.summary(response, raw_file=str(rel), with_levels=technical)
     except (ValueError, KeyError):
         return None
+    if technical:
+        # The raw file is already written, so a parallel call's scan sees it (see _pack_prices).
+        args = event.get("tool_input") or {}
+        ticker = price_stats.ticker_of(price_stats.parse(response)[0]) or args.get("ticker") or args.get("symbol")
+        if ticker:
+            blocks = _safe_blocks(path.parent.parent.name, lambda: _raw_price_series(path.parent), str(ticker))
+            if blocks:
+                text += "\n" + _rs_text(blocks)
     return {"hookEventName": "PostToolUse", "updatedMCPToolOutput": [{"type": "text", "text": text}]}
 
 

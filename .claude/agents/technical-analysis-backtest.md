@@ -1,6 +1,6 @@
 ---
 name: technical-analysis-backtest
-description: Backtest mode of the technical-analysis agent. Same job, no data tools - reads only its audited data pack. Launched by the middleware agent in /backtest runs.
+description: Backtest mode of the technical-analysis agent (chart read against SPY, its sector ETF and the regime). Same job, no data tools - reads only its audited data pack. Launched by the middleware agent in /backtest runs.
 tools: Read, Write, Glob, Grep
 model: claude-sonnet-5
 effort: medium

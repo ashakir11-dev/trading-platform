@@ -11,14 +11,16 @@ opinion about any stock: you fetch, filter and record.
 
 Your brief names: the `stage` (agent) and `subject` you are building a pack for, the
 run's `as_of`, the pack folder (`workspace/runs/<run_id>/packs/<stage>/<subject>/`), the
-upstream analyses of this run (to know e.g. which sector or ticker is meant), and, in an
-extension round, a `requests.md` from the stage agent.
+upstream analyses of this run (to know e.g. which sector or ticker is meant), the stage
+agent's `task` line (e.g. the technical agent's sector ETF), and, in an extension round,
+a `requests.md` from the stage agent.
 
 ## Steps
 
 1. Write `<pack>/claim.md` (format below). Data tools are blocked until you do.
-2. Read `prompts/<stage>/role.md` ("Data to gather") and the upstream analyses: that is
-   what the stage agent will need. In an extension round, fetch only what `requests.md`
+2. Read `prompts/<stage>/role.md` ("Data to gather"), the task line and the upstream
+   analyses: that is what the stage agent will need (for technical analysis: the stock,
+   SPY and the sector ETF over the same dates, and VIX). In an extension round, fetch only what `requests.md`
    asks for.
 3. Fetch it, **batching** independent calls in one message, applying the rules below.
    Your raw responses are saved automatically to a private folder the stage agent can't
@@ -27,7 +29,8 @@ extension round, a `requests.md` from the stage agent.
    `data/<Tool>-<label>.md` (e.g. `ListFilings-XOM.md`), with every row that passed and
    the date that made it visible. **Prices are written for you:** each `GetStockPrices`
    response is copied to `data/NNN-GetStockPrices.md` with bars after `as_of` removed
-   and statistics computed. Don't write price files yourself.
+   and statistics computed (for a technical-analysis pack also the relative-strength
+   blocks against the pack's other tickers). Don't write price files yourself.
 5. Write `<pack>/gaps.md` (refused or empty, and why) and `<pack>/manifest.md` (one row
    per request: tool, parameters, rows kept, rows dropped with the rule, never the
    dropped content).

@@ -29,8 +29,8 @@ reviews. Apply them.
 - **Prices come back as statistics.** A `GetStockPrices` response is replaced, before
   you see it, by statistics computed from every row: returns (1w/1m/3m/6m/12m/YTD with
   their base closes), 20/50/200-day moving averages, 52-week closing and intraday range,
-  ATR14 and dollar volume (the technical agent also gets swing highs/lows and weekly
-  bars). The full rows are saved in your `raw/`. Use these numbers as given and cite the
+  ATR14 and dollar volume (the technical agent also gets MA slopes, volume and
+  volatility lines, swing highs/lows, weekly bars and relative-strength blocks). The full rows are saved in your `raw/`. Use these numbers as given and cite the
   raw file; read the rows only when you need a specific bar.
 
 ## Data rules
@@ -97,7 +97,7 @@ restate it.
   ones that didn't. The same for risks: every risk you weighed, one line each.
 - **Length targets** (the whole file, frontmatter included): market scanner ~9K
   characters, sector deep dive `output.md` ~5K and each company file ~1.5K, company deep
-  dive ~7K, technical analysis ~6K, follow-up ~5K. Over the target is fine only when
+  dive ~7K, technical analysis ~7K, follow-up ~5K. Over the target is fine only when
   every line carries something not said elsewhere.
 
 ## Formats inside analyses

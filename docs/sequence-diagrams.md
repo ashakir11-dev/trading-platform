@@ -45,8 +45,9 @@ sequenceDiagram
         A2->>WS: output.md (verdict, catalyst checks)
     end
     par one per candidate that passed
-        MW->>A3: brief (ticker, risk_bucket, upstream = company, profile)
-        A3->>EQ: prices + SPY (statistics, indicators, levels), quote, earnings
+        MW->>A3: brief (ticker, risk_bucket, sector ETF, upstream = company, profile)
+        A3->>EQ: prices + SPY + sector ETF (statistics, levels, RS lines), VIX, quote, earnings
+        Note over A3: chart read: stage, structure, volume, volatility,<br/>relative context (vs SPY, vs sector), regime
         Note over A3: plan in the bucket's profile: horizon, entry style,<br/>scale-out targets, entry deadline; rules checked against it
         A3->>WS: output.md (plan + rule results, risk_bucket unchanged)
     end

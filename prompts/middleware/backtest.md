@@ -21,7 +21,9 @@ launch, you first have its data pack built and audited.
 
 1. **Gatekeeper:** launch `gatekeeper` with: `stage`, `subject`, `as_of`, `run_id`,
    `pack: workspace/runs/<run_id>/packs/<stage>/<subject>`, the upstream analysis folders
-   the stage agent will get, and `allow_current_constituents` for the sector stage.
+   the stage agent will get, the stage agent's `task` line (for technical analysis it
+   names the sector ETF to fetch next to SPY), and `allow_current_constituents` for the
+   sector stage.
 2. **Audit:** launch `pit-auditor` with the pack and `as_of`. On `verdict: leaks`,
    relaunch the gatekeeper once with the audit attached (it must rebuild the pack
    without the leaks), then audit again. Still leaking: record the pack under "Errors"

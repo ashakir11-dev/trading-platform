@@ -38,7 +38,7 @@ upstream call.
 | **market-scanner** | Reads sector ETF performance and macro data; names sectors with upside or downside potential. |
 | **sector-deep-dive** | One per sector: screens the sector's largest companies into a shortlist ranked by a 0-100 potential score. |
 | **company-deep-dive** | One per candidate: checks fundamentals and verifies each claimed catalyst against filings and news. |
-| **technical-analysis** | One per candidate: reads the charts for your horizon, proposes entry, stop, target and horizon, applies your profile's rules, or rejects. |
+| **technical-analysis** | One per candidate: reads the charts for your horizon with a fixed technician's procedure (stage, structure, volume, volatility) and against SPY, its sector ETF and the market regime, proposes entry, stop, target and horizon, applies your profile's rules, or rejects. |
 | **middleware** | Runs the stages, applies the forwarding rules, re-checks each plan's numbers, reports to you, records your decisions. |
 | **follow-up** | Watches accepted positions: stop/target and material-news alerts (12h cooldown), full re-review on alert or every 14 days. |
 | **stage-evaluator / stage-feedback** | Grade each agent's past calls (outcome facts and, separately, reasoning quality) and propose lessons. |
